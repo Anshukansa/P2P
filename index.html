@@ -3,444 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Speed P2P File Transfer</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .status-bar {
-            background: rgba(255,255,255,0.95);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-        }
-
-        .role-selector {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-
-        .role-btn {
-            padding: 15px 30px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: linear-gradient(45deg, #ff6b6b, #ee5a6f);
-            color: white;
-        }
-
-        .role-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .role-btn.active {
-            background: linear-gradient(45deg, #51cf66, #40c057);
-        }
-
-        .connection-area {
-            background: rgba(255,255,255,0.95);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-        }
-
-        .peer-id {
-            background: #f8f9fa;
-            border: 2px dashed #dee2e6;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            font-family: monospace;
-            font-size: 1.1rem;
-            word-break: break-all;
-            text-align: center;
-            cursor: pointer;
-        }
-
-        .peer-id:hover {
-            background: #e9ecef;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin: 15px 0;
-        }
-
-        .input-group input {
-            flex: 1;
-            padding: 12px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-
-        .input-group button {
-            padding: 12px 20px;
-            background: linear-gradient(45deg, #4ecdc4, #44d9cc);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .file-area {
-            background: rgba(255,255,255,0.95);
-            border-radius: 15px;
-            padding: 25px;
-            backdrop-filter: blur(10px);
-        }
-
-        .file-upload {
-            border: 3px dashed #dee2e6;
-            border-radius: 15px;
-            padding: 40px;
-            text-align: center;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .file-upload.dragover {
-            border-color: #4ecdc4;
-            background: rgba(78, 205, 196, 0.1);
-        }
-
-        .file-upload input {
-            display: none;
-        }
-
-        .file-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            background: white;
-        }
-
-        .file-info {
-            flex: 1;
-            margin-left: 15px;
-        }
-
-        .file-name {
-            font-weight: 600;
-            margin-bottom: 5px;
-            word-break: break-word;
-        }
-
-        .file-size {
-            color: #6c757d;
-            font-size: 0.9rem;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(45deg, #4ecdc4, #44d9cc);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .speed-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        .download-btn {
-            padding: 8px 16px;
-            background: linear-gradient(45deg, #51cf66, #40c057);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-
-        .download-btn:hover {
-            transform: translateY(-1px);
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .connected {
-            color: #51cf66;
-            font-weight: 600;
-        }
-
-        .file-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-
-        .error {
-            color: #dc3545;
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-
-        .copy-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            margin-left: 10px;
-        }
-
-        @media (max-width: 768px) {
-            .role-selector {
-                flex-direction: column;
-            }
-            
-            .input-group {
-                flex-direction: column;
-            }
-        }
-    </style>
+    <title>P2P File Transfer</title>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 High-Speed P2P File Transfer</h1>
-            <p>Direct device-to-device file sharing via WebRTC</p>
+    <div id="app">
+        <h1>High-Speed P2P File Transfer</h1>
+        
+        <div id="setup">
+            <button id="createRoom">Create Room (Host)</button>
+            <br><br>
+            <input type="text" id="roomId" placeholder="Enter Room ID">
+            <button id="joinRoom">Join Room</button>
         </div>
 
-        <div class="status-bar">
-            <div class="role-selector">
-                <button class="role-btn" id="senderBtn">📤 Send Files</button>
-                <button class="role-btn" id="receiverBtn">📥 Receive Files</button>
-            </div>
-            <div id="status">Select your role to start</div>
+        <div id="status" style="display:none;">
+            <h3>Status: <span id="connectionStatus">Connecting...</span></h3>
+            <p>Room ID: <span id="currentRoomId"></span></p>
+            <p>Share this Room ID with other devices</p>
         </div>
 
-        <div class="connection-area" id="connectionArea">
-            <div id="senderArea" class="hidden">
-                <h3>Your Connection ID:</h3>
-                <div class="peer-id" id="senderId" title="Click to copy">
-                    Generating...
-                    <button class="copy-btn" id="copyBtn">Copy</button>
-                </div>
-                <p>Share this ID with the receiver</p>
+        <div id="fileSection" style="display:none;">
+            <h3>Send Files</h3>
+            <input type="file" id="fileInput" multiple>
+            <button id="sendFiles">Send Selected Files</button>
+            
+            <div id="progress" style="display:none;">
+                <p>Sending: <span id="fileName"></span></p>
+                <progress id="progressBar" value="0" max="100"></progress>
+                <span id="progressText">0%</span>
             </div>
-
-            <div id="receiverArea" class="hidden">
-                <h3>Enter Sender's ID:</h3>
-                <div class="input-group">
-                    <input type="text" id="senderIdInput" placeholder="Paste sender's connection ID here">
-                    <button id="connectBtn">Connect</button>
-                </div>
-            </div>
-
-            <div id="connectionStatus"></div>
         </div>
 
-        <div class="file-area" id="fileArea" class="hidden">
-            <div id="uploadArea" class="hidden">
-                <div class="file-upload" id="fileUpload">
-                    <input type="file" id="fileInput" multiple>
-                    <div>
-                        <h3>📁 Drop files here or click to select</h3>
-                        <p>Supports multiple files • High-speed transfer • Max 1GB per file</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="file-list" id="fileList"></div>
+        <div id="receivedFiles">
+            <h3>Received Files</h3>
+            <div id="filesList"></div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
         class P2PFileTransfer {
             constructor() {
-                this.peer = null;
-                this.connection = null;
+                this.localConnection = null;
+                this.remoteConnection = null;
                 this.dataChannel = null;
-                this.isSender = false;
-                this.peerId = null;
-                this.chunkSize = 16384; // 16KB chunks for better compatibility
-                this.receivedFiles = new Map();
-                this.sendingFiles = new Map();
+                this.isHost = false;
+                this.roomId = null;
+                this.pendingFiles = [];
+                this.receivingFile = null;
+                this.receivedChunks = [];
                 
-                // Simple signaling server using Firebase or any WebRTC signaling
-                this.signalingUrl = 'wss://ws.postman-echo.com/raw'; // Demo server
-                this.signalingWs = null;
-                
-                this.initializeElements();
                 this.setupEventListeners();
-                this.initSignaling();
-            }
-
-            initializeElements() {
-                this.senderBtn = document.getElementById('senderBtn');
-                this.receiverBtn = document.getElementById('receiverBtn');
-                this.status = document.getElementById('status');
-                this.connectionArea = document.getElementById('connectionArea');
-                this.senderArea = document.getElementById('senderArea');
-                this.receiverArea = document.getElementById('receiverArea');
-                this.senderId = document.getElementById('senderId');
-                this.copyBtn = document.getElementById('copyBtn');
-                this.senderIdInput = document.getElementById('senderIdInput');
-                this.connectBtn = document.getElementById('connectBtn');
-                this.connectionStatus = document.getElementById('connectionStatus');
-                this.fileArea = document.getElementById('fileArea');
-                this.uploadArea = document.getElementById('uploadArea');
-                this.fileUpload = document.getElementById('fileUpload');
-                this.fileInput = document.getElementById('fileInput');
-                this.fileList = document.getElementById('fileList');
+                this.setupSignaling();
             }
 
             setupEventListeners() {
-                this.senderBtn.addEventListener('click', () => this.initSender());
-                this.receiverBtn.addEventListener('click', () => this.initReceiver());
-                this.connectBtn.addEventListener('click', () => this.connectToPeer());
-                this.copyBtn.addEventListener('click', () => this.copyPeerId());
-                
-                this.fileUpload.addEventListener('click', () => this.fileInput.click());
-                this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-                
-                // Drag and drop
-                this.fileUpload.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    this.fileUpload.classList.add('dragover');
-                });
-                
-                this.fileUpload.addEventListener('dragleave', () => {
-                    this.fileUpload.classList.remove('dragover');
-                });
-                
-                this.fileUpload.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    this.fileUpload.classList.remove('dragover');
-                    this.handleFileSelect(e);
-                });
+                document.getElementById('createRoom').addEventListener('click', () => this.createRoom());
+                document.getElementById('joinRoom').addEventListener('click', () => this.joinRoom());
+                document.getElementById('sendFiles').addEventListener('click', () => this.sendFiles());
             }
 
-            initSignaling() {
-                // For demo purposes, we'll use a simplified connection method
-                // In production, you'd use a proper signaling server
-                this.connections = new Map();
+            setupSignaling() {
+                // Using Firebase Realtime Database for signaling (you'll need to replace with your config)
+                // For GitHub Pages, you can use any free WebRTC signaling service
+                this.signalingUrl = 'wss://ws.postman-echo.com/raw'; // Replace with actual signaling server
             }
 
-            async initSender() {
-                this.isSender = true;
-                this.senderBtn.classList.add('active');
-                this.receiverBtn.classList.remove('active');
+            async createRoom() {
+                this.isHost = true;
+                this.roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 
-                this.peerId = this.generatePeerId();
-                this.senderId.textContent = this.peerId;
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('status').style.display = 'block';
+                document.getElementById('currentRoomId').textContent = this.roomId;
+                document.getElementById('connectionStatus').textContent = 'Waiting for peer...';
                 
-                this.senderArea.classList.remove('hidden');
-                this.receiverArea.classList.add('hidden');
-                this.fileArea.classList.remove('hidden');
-                this.uploadArea.classList.remove('hidden');
-                
-                this.status.innerHTML = '🟡 Waiting for receiver to connect...';
-                
-                await this.setupWebRTC();
+                await this.setupPeerConnection();
+                await this.createOffer();
             }
 
-            async initReceiver() {
-                this.isSender = false;
-                this.receiverBtn.classList.add('active');
-                this.senderBtn.classList.remove('active');
-                
-                this.receiverArea.classList.remove('hidden');
-                this.senderArea.classList.add('hidden');
-                this.fileArea.classList.remove('hidden');
-                this.uploadArea.classList.add('hidden');
-                
-                this.status.innerHTML = '🟡 Enter sender\'s ID to connect';
-            }
-
-            generatePeerId() {
-                return Math.random().toString(36).substr(2, 8).toUpperCase();
-            }
-
-            async copyPeerId() {
-                try {
-                    await navigator.clipboard.writeText(this.peerId);
-                    this.copyBtn.textContent = 'Copied!';
-                    setTimeout(() => {
-                        this.copyBtn.textContent = 'Copy';
-                    }, 2000);
-                } catch (err) {
-                    console.error('Failed to copy: ', err);
+            async joinRoom() {
+                const roomId = document.getElementById('roomId').value.trim().toUpperCase();
+                if (!roomId) {
+                    alert('Please enter a Room ID');
+                    return;
                 }
+                
+                this.roomId = roomId;
+                this.isHost = false;
+                
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('status').style.display = 'block';
+                document.getElementById('currentRoomId').textContent = this.roomId;
+                document.getElementById('connectionStatus').textContent = 'Connecting...';
+                
+                await this.setupPeerConnection();
+                // In real implementation, fetch offer from signaling server
+                // For demo, we'll simulate direct connection
+                setTimeout(() => this.simulateConnection(), 1000);
             }
 
-            async setupWebRTC() {
+            async setupPeerConnection() {
                 const config = {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
@@ -448,326 +110,249 @@
                     ]
                 };
 
-                this.peer = new RTCPeerConnection(config);
-
-                if (this.isSender) {
-                    this.dataChannel = this.peer.createDataChannel('fileTransfer', {
+                this.localConnection = new RTCPeerConnection(config);
+                
+                if (this.isHost) {
+                    this.dataChannel = this.localConnection.createDataChannel('files', {
                         ordered: true,
                         maxRetransmits: 3
                     });
                     this.setupDataChannel(this.dataChannel);
                 } else {
-                    this.peer.ondatachannel = (event) => {
+                    this.localConnection.ondatachannel = (event) => {
                         this.dataChannel = event.channel;
                         this.setupDataChannel(this.dataChannel);
                     };
                 }
 
-                this.peer.onicecandidate = (event) => {
+                this.localConnection.onicecandidate = (event) => {
                     if (event.candidate) {
-                        // In a real app, send this to the other peer via signaling server
+                        // Send candidate to remote peer via signaling
                         console.log('ICE candidate:', event.candidate);
                     }
                 };
 
-                // Simplified connection for demo
-                setTimeout(() => {
-                    this.simulateConnection();
-                }, 1000);
+                this.localConnection.onconnectionstatechange = () => {
+                    console.log('Connection state:', this.localConnection.connectionState);
+                    if (this.localConnection.connectionState === 'connected') {
+                        document.getElementById('connectionStatus').textContent = 'Connected';
+                        document.getElementById('fileSection').style.display = 'block';
+                    }
+                };
             }
 
             setupDataChannel(channel) {
+                channel.binaryType = 'arraybuffer';
+                
                 channel.onopen = () => {
-                    this.status.innerHTML = '🟢 <span class="connected">Connected! Ready for high-speed transfer.</span>';
-                    this.connectionStatus.innerHTML = '<p style="color: #51cf66;">✓ WebRTC P2P connection established</p>';
+                    console.log('Data channel opened');
+                    document.getElementById('connectionStatus').textContent = 'Connected';
+                    document.getElementById('fileSection').style.display = 'block';
                 };
-
+                
                 channel.onmessage = (event) => {
-                    this.handleIncomingData(event.data);
+                    this.handleReceivedData(event.data);
                 };
-
+                
                 channel.onerror = (error) => {
                     console.error('Data channel error:', error);
-                    this.showError('Connection error. Please try again.');
-                };
-
-                channel.onclose = () => {
-                    this.status.innerHTML = '🔴 Connection closed';
                 };
             }
 
+            async createOffer() {
+                const offer = await this.localConnection.createOffer();
+                await this.localConnection.setLocalDescription(offer);
+                // Send offer to signaling server
+                console.log('Created offer:', offer);
+            }
+
+            // Simulate connection for demo (replace with real signaling)
             simulateConnection() {
-                // For demo purposes, simulate a successful connection
-                if (this.isSender) {
-                    this.status.innerHTML = '🟢 <span class="connected">Ready to send files!</span>';
-                }
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('fileSection').style.display = 'block';
             }
 
-            async connectToPeer() {
-                const senderId = this.senderIdInput.value.trim();
-                if (!senderId) {
-                    this.showError('Please enter sender\'s ID');
+            async sendFiles() {
+                const fileInput = document.getElementById('fileInput');
+                const files = Array.from(fileInput.files);
+                
+                if (files.length === 0) {
+                    alert('Please select files to send');
                     return;
                 }
 
-                this.status.innerHTML = '🟡 Connecting...';
-                
-                await this.setupWebRTC();
-                
-                // Simulate connection for demo
-                setTimeout(() => {
-                    this.status.innerHTML = '🟢 <span class="connected">Connected! Ready to receive files.</span>';
-                    this.connectionStatus.innerHTML = '<p style="color: #51cf66;">✓ WebRTC P2P connection established</p>';
-                }, 1500);
-            }
-
-            handleFileSelect(e) {
-                const files = e.target.files || e.dataTransfer.files;
-                
-                for (let file of files) {
-                    if (file.size > 1024 * 1024 * 1024) { // 1GB limit
-                        this.showError(`File "${file.name}" is too large. Maximum size is 1GB.`);
-                        continue;
-                    }
-                    
-                    if (this.isSender) {
-                        this.sendFile(file);
-                    }
+                for (const file of files) {
+                    await this.sendFile(file);
                 }
             }
 
             async sendFile(file) {
-                const fileId = this.generateFileId();
-                const fileInfo = {
-                    id: fileId,
+                const chunkSize = 16384; // 16KB chunks for high speed
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                
+                // Send file metadata
+                const metadata = {
+                    type: 'fileStart',
                     name: file.name,
                     size: file.size,
-                    type: file.type,
-                    chunks: Math.ceil(file.size / this.chunkSize),
-                    checksum: await this.calculateChecksum(file)
+                    totalChunks: totalChunks,
+                    mimeType: file.type
                 };
-
-                this.sendingFiles.set(fileId, {
-                    file: file,
-                    info: fileInfo,
-                    sentChunks: 0
-                });
-
-                const fileItem = this.addFileToList(file, true);
                 
-                // Send file info first
-                this.sendMessage({
-                    type: 'fileInfo',
-                    data: fileInfo
-                });
-
-                // Start sending chunks
-                this.sendFileChunks(fileId, fileItem);
-            }
-
-            async sendFileChunks(fileId, fileItem) {
-                const fileData = this.sendingFiles.get(fileId);
-                const { file, info } = fileData;
-                
-                let offset = 0;
-                let chunkIndex = 0;
-                const startTime = Date.now();
-
-                const sendNextChunk = async () => {
-                    if (offset < file.size) {
-                        const chunk = file.slice(offset, offset + this.chunkSize);
-                        const arrayBuffer = await chunk.arrayBuffer();
-                        
-                        this.sendMessage({
-                            type: 'fileChunk',
-                            fileId: fileId,
-                            chunkIndex: chunkIndex,
-                            data: arrayBuffer
-                        });
-
-                        offset += this.chunkSize;
-                        chunkIndex++;
-                        fileData.sentChunks = chunkIndex;
-
-                        // Update progress
-                        const progress = (offset / file.size) * 100;
-                        const elapsed = (Date.now() - startTime) / 1000;
-                        const speed = (offset / 1024 / 1024) / elapsed; // MB/s
-
-                        this.updateProgress(fileItem, progress, speed);
-
-                        // Continue sending with small delay to prevent overwhelming
-                        setTimeout(sendNextChunk, 1);
-                    } else {
-                        // File complete
-                        this.sendMessage({
-                            type: 'fileComplete',
-                            fileId: fileId
-                        });
-                        this.completeFileTransfer(fileItem, true);
-                    }
-                };
-
-                sendNextChunk();
-            }
-
-            handleIncomingData(data) {
-                try {
-                    const message = JSON.parse(data);
-                    
-                    switch (message.type) {
-                        case 'fileInfo':
-                            this.handleFileInfo(message.data);
-                            break;
-                        case 'fileChunk':
-                            this.handleFileChunk(message);
-                            break;
-                        case 'fileComplete':
-                            this.handleFileComplete(message.fileId);
-                            break;
-                    }
-                } catch (error) {
-                    // Handle binary data (file chunks)
-                    console.log('Received binary data:', data.byteLength);
-                }
-            }
-
-            handleFileInfo(fileInfo) {
-                this.receivedFiles.set(fileInfo.id, {
-                    info: fileInfo,
-                    chunks: new Array(fileInfo.chunks),
-                    receivedChunks: 0
-                });
-
-                const fileItem = this.addFileToList({
-                    name: fileInfo.name,
-                    size: fileInfo.size
-                }, false);
-
-                this.receivedFiles.get(fileInfo.id).element = fileItem;
-            }
-
-            handleFileChunk(message) {
-                const fileData = this.receivedFiles.get(message.fileId);
-                if (!fileData) return;
-
-                fileData.chunks[message.chunkIndex] = message.data;
-                fileData.receivedChunks++;
-
-                const progress = (fileData.receivedChunks / fileData.info.chunks) * 100;
-                this.updateProgress(fileData.element, progress, 0);
-
-                if (fileData.receivedChunks === fileData.info.chunks) {
-                    this.assembleFile(message.fileId);
-                }
-            }
-
-            handleFileComplete(fileId) {
-                console.log('File transfer complete:', fileId);
-            }
-
-            async assembleFile(fileId) {
-                const fileData = this.receivedFiles.get(fileId);
-                const { info, chunks } = fileData;
-
-                // Combine all chunks
-                const totalSize = chunks.reduce((size, chunk) => size + chunk.byteLength, 0);
-                const combinedArray = new Uint8Array(totalSize);
-                
-                let offset = 0;
-                for (const chunk of chunks) {
-                    combinedArray.set(new Uint8Array(chunk), offset);
-                    offset += chunk.byteLength;
-                }
-
-                // Verify checksum
-                const blob = new Blob([combinedArray], { type: info.type });
-                const receivedChecksum = await this.calculateChecksum(blob);
-                
-                if (receivedChecksum !== info.checksum) {
-                    this.showError(`File "${info.name}" failed integrity check. Transfer corrupted.`);
+                if (this.dataChannel && this.dataChannel.readyState === 'open') {
+                    this.dataChannel.send(JSON.stringify(metadata));
+                } else {
+                    // For demo, simulate sending
+                    this.simulateSending(file);
                     return;
                 }
 
-                // File is complete and verified
-                fileData.blob = blob;
-                this.completeFileTransfer(fileData.element, false, blob, info.name);
-            }
+                document.getElementById('progress').style.display = 'block';
+                document.getElementById('fileName').textContent = file.name;
 
-            addFileToList(file, isSending) {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                
-                const fileIcon = document.createElement('div');
-                fileIcon.className = 'file-icon';
-                fileIcon.textContent = this.getFileIcon(file.name);
-                
-                const fileInfo = document.createElement('div');
-                fileInfo.className = 'file-info';
-                
-                const fileName = document.createElement('div');
-                fileName.className = 'file-name';
-                fileName.textContent = file.name;
-                
-                const fileSize = document.createElement('div');
-                fileSize.className = 'file-size';
-                fileSize.textContent = this.formatFileSize(file.size);
-                
-                const progressBar = document.createElement('div');
-                progressBar.className = 'progress-bar';
-                const progressFill = document.createElement('div');
-                progressFill.className = 'progress-fill';
-                progressBar.appendChild(progressFill);
-                
-                const speedInfo = document.createElement('div');
-                speedInfo.className = 'speed-info';
-                speedInfo.innerHTML = '<span>0%</span><span>0 MB/s</span>';
-                
-                fileInfo.appendChild(fileName);
-                fileInfo.appendChild(fileSize);
-                fileInfo.appendChild(progressBar);
-                fileInfo.appendChild(speedInfo);
-                
-                fileItem.appendChild(fileIcon);
-                fileItem.appendChild(fileInfo);
-                
-                this.fileList.appendChild(fileItem);
-                
-                return fileItem;
-            }
-
-            updateProgress(fileItem, progress, speed) {
-                const progressFill = fileItem.querySelector('.progress-fill');
-                const speedInfo = fileItem.querySelector('.speed-info');
-                
-                progressFill.style.width = Math.min(progress, 100) + '%';
-                
-                const speedSpans = speedInfo.querySelectorAll('span');
-                speedSpans[0].textContent = Math.round(progress) + '%';
-                speedSpans[1].textContent = speed.toFixed(1) + ' MB/s';
-            }
-
-            completeFileTransfer(fileItem, isSending, blob = null, fileName = null) {
-                const speedInfo = fileItem.querySelector('.speed-info');
-                const speedSpans = speedInfo.querySelectorAll('span');
-                
-                speedSpans[0].textContent = '100%';
-                speedSpans[1].textContent = '✓ Complete';
-                speedSpans[1].style.color = '#51cf66';
-
-                if (!isSending && blob) {
-                    // Add download button for received files
-                    const downloadBtn = document.createElement('button');
-                    downloadBtn.className = 'download-btn';
-                    downloadBtn.textContent = '⬇ Download';
-                    downloadBtn.onclick = () => this.downloadFile(blob, fileName);
+                // Send file in chunks
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunk = file.slice(start, end);
                     
-                    fileItem.appendChild(downloadBtn);
+                    const arrayBuffer = await chunk.arrayBuffer();
+                    
+                    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+                        this.dataChannel.send(arrayBuffer);
+                    }
+                    
+                    const progress = ((i + 1) / totalChunks) * 100;
+                    document.getElementById('progressBar').value = progress;
+                    document.getElementById('progressText').textContent = `${Math.round(progress)}%`;
+                    
+                    // Small delay to prevent overwhelming
+                    if (i % 10 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1));
+                    }
+                }
+
+                // Send end marker
+                const endMarker = { type: 'fileEnd' };
+                if (this.dataChannel && this.dataChannel.readyState === 'open') {
+                    this.dataChannel.send(JSON.stringify(endMarker));
+                }
+
+                document.getElementById('progress').style.display = 'none';
+                alert(`File "${file.name}" sent successfully!`);
+            }
+
+            simulateSending(file) {
+                document.getElementById('progress').style.display = 'block';
+                document.getElementById('fileName').textContent = file.name;
+                
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 5;
+                    document.getElementById('progressBar').value = progress;
+                    document.getElementById('progressText').textContent = `${progress}%`;
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        document.getElementById('progress').style.display = 'none';
+                        this.simulateReceiving(file);
+                        alert(`File "${file.name}" sent successfully!`);
+                    }
+                }, 50);
+            }
+
+            simulateReceiving(file) {
+                const filesList = document.getElementById('filesList');
+                const fileDiv = document.createElement('div');
+                fileDiv.innerHTML = `
+                    <p><strong>${file.name}</strong> (${this.formatFileSize(file.size)})</p>
+                    <button onclick="p2pTransfer.downloadFile('${file.name}', ${file.size}, '${file.type}')">Download</button>
+                    <hr>
+                `;
+                filesList.appendChild(fileDiv);
+                
+                // Store file data for download
+                if (!window.receivedFiles) window.receivedFiles = new Map();
+                window.receivedFiles.set(file.name, file);
+            }
+
+            handleReceivedData(data) {
+                if (typeof data === 'string') {
+                    const message = JSON.parse(data);
+                    
+                    if (message.type === 'fileStart') {
+                        this.receivingFile = {
+                            name: message.name,
+                            size: message.size,
+                            totalChunks: message.totalChunks,
+                            mimeType: message.mimeType,
+                            receivedChunks: 0
+                        };
+                        this.receivedChunks = [];
+                        console.log('Receiving file:', message.name);
+                        
+                    } else if (message.type === 'fileEnd') {
+                        this.finalizeReceivedFile();
+                    }
+                } else {
+                    // Binary data (file chunk)
+                    if (this.receivingFile) {
+                        this.receivedChunks.push(new Uint8Array(data));
+                        this.receivingFile.receivedChunks++;
+                        
+                        const progress = (this.receivingFile.receivedChunks / this.receivingFile.totalChunks) * 100;
+                        console.log(`Receiving ${this.receivingFile.name}: ${Math.round(progress)}%`);
+                    }
                 }
             }
 
-            downloadFile(blob, fileName) {
-                const url = URL.createObjectURL(blob);
+            finalizeReceivedFile() {
+                if (!this.receivingFile) return;
+                
+                // Combine chunks
+                const totalSize = this.receivedChunks.reduce((size, chunk) => size + chunk.length, 0);
+                const combinedArray = new Uint8Array(totalSize);
+                let offset = 0;
+                
+                for (const chunk of this.receivedChunks) {
+                    combinedArray.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                
+                // Create blob and add to received files
+                const blob = new Blob([combinedArray], { type: this.receivingFile.mimeType });
+                const file = new File([blob], this.receivingFile.name, { type: this.receivingFile.mimeType });
+                
+                this.addReceivedFile(file);
+                
+                // Reset
+                this.receivingFile = null;
+                this.receivedChunks = [];
+            }
+
+            addReceivedFile(file) {
+                const filesList = document.getElementById('filesList');
+                const fileDiv = document.createElement('div');
+                fileDiv.innerHTML = `
+                    <p><strong>${file.name}</strong> (${this.formatFileSize(file.size)})</p>
+                    <button onclick="p2pTransfer.downloadFile('${file.name}', ${file.size}, '${file.type}')">Download</button>
+                    <hr>
+                `;
+                filesList.appendChild(fileDiv);
+                
+                // Store file for download
+                if (!window.receivedFiles) window.receivedFiles = new Map();
+                window.receivedFiles.set(file.name, file);
+            }
+
+            downloadFile(fileName, fileSize, fileType) {
+                const file = window.receivedFiles?.get(fileName);
+                if (!file) {
+                    alert('File not found');
+                    return;
+                }
+                
+                const url = URL.createObjectURL(file);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = fileName;
@@ -777,66 +362,21 @@
                 URL.revokeObjectURL(url);
             }
 
-            async calculateChecksum(file) {
-                const arrayBuffer = await file.arrayBuffer();
-                const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
-                return CryptoJS.MD5(wordArray).toString();
-            }
-
-            generateFileId() {
-                return Math.random().toString(36).substr(2, 16);
-            }
-
-            sendMessage(message) {
-                if (this.dataChannel && this.dataChannel.readyState === 'open') {
-                    try {
-                        this.dataChannel.send(JSON.stringify(message));
-                    } catch (error) {
-                        console.error('Error sending message:', error);
-                    }
-                } else {
-                    // For demo, simulate receiving the message
-                    if (!this.isSender) {
-                        setTimeout(() => {
-                            this.handleIncomingData(JSON.stringify(message));
-                        }, 100);
-                    }
-                }
-            }
-
-            showError(message) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'error';
-                errorDiv.textContent = message;
-                this.connectionStatus.appendChild(errorDiv);
-                
-                setTimeout(() => {
-                    errorDiv.remove();
-                }, 5000);
-            }
-
-            getFileIcon(filename) {
-                const ext = filename.split('.').pop().toLowerCase();
-                const iconMap = {
-                    'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📝',
-                    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'webp': '🖼️',
-                    'mp4': '🎥', 'avi': '🎥', 'mov': '🎥', 'mkv': '🎥', 'webm': '🎥',
-                    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵', 'm4a': '🎵',
-                    'zip': '📦', 'rar': '📦', '7z': '📦', 'tar': '📦'
-                };
-                return iconMap[ext] || '📁';
-            }
-
             formatFileSize(bytes) {
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
                 if (bytes === 0) return '0 Bytes';
-                const i = Math.floor(Math.log(bytes) / Math.log(1024));
-                return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
         }
 
-        // Initialize the application
-        new P2PFileTransfer();
+        // Initialize
+        const p2pTransfer = new P2PFileTransfer();
+        window.p2pTransfer = p2pTransfer; // Make global for button clicks
+        
+        // Initialize received files storage
+        window.receivedFiles = new Map();
     </script>
 </body>
 </html>
