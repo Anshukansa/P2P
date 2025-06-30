@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Speed P2P Transfer</title>
+    <title>Simple File Transfer</title>
     <style>
         * {
             margin: 0;
@@ -19,47 +19,41 @@
         }
         
         .container {
-            max-width: 600px;
+            max-width: 500px;
             margin: 0 auto;
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             overflow: hidden;
         }
         
         .header {
             background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
-            padding: 30px 20px;
+            padding: 25px;
             text-align: center;
         }
         
         .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
+            font-size: 1.8em;
+            margin-bottom: 5px;
         }
         
-        .speed-indicator {
-            background: rgba(255,255,255,0.2);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 14px;
-            text-align: center;
+        .main {
+            padding: 25px;
         }
         
-        .status-section {
-            padding: 30px 20px;
+        .device-section {
             text-align: center;
-            background: #f8f9fa;
+            margin-bottom: 25px;
         }
         
         .device-circle {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            margin: 20px auto;
+            background: #4CAF50;
+            margin: 15px auto;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -67,7 +61,6 @@
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 16px;
         }
         
         .device-circle:hover {
@@ -75,57 +68,39 @@
         }
         
         .device-circle.waiting {
-            background: linear-gradient(45deg, #2196F3, #1976D2);
+            background: #2196F3;
             animation: pulse 2s infinite;
         }
         
         .device-circle.connected {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: #4CAF50;
         }
         
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
         
         .connection-code {
-            background: #e3f2fd;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
             text-align: center;
-        }
-        
-        .code-display {
-            font-family: 'Courier New', monospace;
-            font-size: 28px;
+            font-family: monospace;
+            font-size: 24px;
             font-weight: bold;
-            color: #1976d2;
-            letter-spacing: 4px;
-            margin: 10px 0;
-        }
-        
-        .share-url {
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            word-break: break-all;
-            margin: 10px 0;
-            cursor: pointer;
-        }
-        
-        .actions {
-            padding: 30px 20px;
+            letter-spacing: 3px;
+            color: #333;
         }
         
         .btn {
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
+            padding: 12px;
+            margin: 8px 0;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
@@ -138,50 +113,57 @@
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: #2196F3;
             color: white;
         }
         
         .btn-success {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: #4CAF50;
             color: white;
         }
         
         .btn-danger {
-            background: linear-gradient(45deg, #f44336, #d32f2f);
+            background: #f44336;
             color: white;
+        }
+        
+        .btn-download {
+            background: #FF9800;
+            color: white;
+            margin: 10px 0;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         
         .input-field {
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
+            padding: 12px;
+            margin: 8px 0;
             border: 2px solid #ddd;
-            border-radius: 10px;
+            border-radius: 8px;
             font-size: 16px;
         }
         
         .input-field:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #2196F3;
         }
         
-        .file-drop {
-            border: 3px dashed #ddd;
-            border-radius: 10px;
-            padding: 40px 20px;
+        .file-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 30px;
             text-align: center;
-            margin: 20px 0;
+            margin: 15px 0;
             transition: all 0.3s ease;
         }
         
-        .file-drop.drag-over {
-            border-color: #667eea;
-            background: rgba(102, 126, 234, 0.1);
-        }
-        
-        .file-list {
-            margin: 20px 0;
+        .file-area.drag-over {
+            border-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
         }
         
         .file-item {
@@ -189,49 +171,46 @@
             padding: 15px;
             border-radius: 8px;
             margin: 10px 0;
+            border-left: 4px solid #2196F3;
         }
         
-        .file-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .file-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .file-size {
+            color: #666;
+            font-size: 14px;
             margin-bottom: 10px;
         }
         
-        .progress {
+        .progress-bar {
             width: 100%;
-            height: 8px;
+            height: 6px;
             background: #e0e0e0;
-            border-radius: 4px;
+            border-radius: 3px;
             overflow: hidden;
-            margin: 5px 0;
+            margin: 8px 0;
         }
         
-        .progress-bar {
+        .progress-fill {
             height: 100%;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: #4CAF50;
             width: 0%;
-            transition: width 0.1s ease;
+            transition: width 0.3s ease;
         }
         
         .progress-text {
             font-size: 12px;
             color: #666;
             text-align: center;
-            margin-top: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .speed-display {
-            color: #2196F3;
-            font-weight: bold;
         }
         
         .status-message {
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            margin: 15px 0;
+            margin: 10px 0;
             text-align: center;
         }
         
@@ -257,116 +236,68 @@
             display: none;
         }
         
-        .copy-btn {
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-left: 10px;
+        .received-files {
+            margin-top: 20px;
         }
-
+        
         .download-item {
             background: #e8f5e8;
             padding: 15px;
             border-radius: 8px;
             margin: 10px 0;
-            border: 1px solid #c8e6c9;
-        }
-
-        .download-btn {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        .transfer-stats {
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
-        }
-
-        .parallel-indicator {
-            background: #fff3e0;
-            color: #ef6c00;
-            padding: 8px;
-            border-radius: 5px;
-            margin: 5px 0;
-            font-size: 11px;
-            text-align: center;
+            border-left: 4px solid #4CAF50;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>⚡ High-Speed P2P Transfer</h1>
-            <p>Maximum speed file sharing between devices</p>
-            <div class="speed-indicator" id="speed-indicator">
-                🚀 Optimized for 100+ Mbps transfers
-            </div>
+            <h1>📁 File Transfer</h1>
+            <p>Simple & reliable file sharing</p>
         </div>
         
-        <div class="status-section">
-            <div id="status-text">Click START to begin</div>
-            
-            <div id="device-circle" class="device-circle" onclick="startConnection()">
-                <span id="device-text">START</span>
-            </div>
-            
-            <div id="connection-info" class="connection-code hidden">
-                <h3>Connection Code:</h3>
-                <div class="code-display" id="connection-code">----</div>
-                <p>Share this code with the other device</p>
-                <div class="share-url" id="share-url" onclick="copyShareUrl()">
-                    <span id="share-url-text">Generating link...</span>
-                    <button class="copy-btn" onclick="copyShareUrl()">Copy</button>
+        <div class="main">
+            <!-- Device Status -->
+            <div class="device-section">
+                <div id="status-text">Ready to start</div>
+                <div id="device-circle" class="device-circle" onclick="startHost()">
+                    <span id="device-text">START</span>
+                </div>
+                
+                <!-- Connection Code -->
+                <div id="code-section" class="hidden">
+                    <div>Share this code:</div>
+                    <div id="connection-code" class="connection-code">------</div>
                 </div>
             </div>
-        </div>
-        
-        <div class="actions">
-            <div id="messages"></div>
             
-            <!-- Transfer Stats -->
-            <div id="transfer-stats" class="transfer-stats hidden">
-                <div>📊 Transfer Statistics:</div>
-                <div id="stats-content"></div>
-            </div>
+            <!-- Messages -->
+            <div id="messages"></div>
             
             <!-- File Selection -->
             <input type="file" id="file-input" multiple style="display: none;">
-            <button class="btn btn-primary" onclick="selectFiles()" id="select-btn" disabled>
-                📁 Select Files to Send
+            <button class="btn btn-primary" onclick="selectFiles()" id="send-btn" disabled>
+                📤 Select Files to Send
             </button>
             
-            <!-- Drag & Drop Area -->
-            <div class="file-drop" id="file-drop">
-                <p>📤 Drop files here or click above to select</p>
+            <!-- Drag Drop -->
+            <div class="file-area" id="drop-area">
+                <p>📎 Drop files here or click above</p>
             </div>
             
-            <!-- File List -->
-            <div id="file-list" class="file-list"></div>
+            <!-- Sending Files -->
+            <div id="sending-files"></div>
             
-            <!-- Downloads -->
-            <div id="download-list" class="file-list"></div>
-            
-            <!-- Connection Input -->
-            <input type="text" id="peer-code" placeholder="Enter connection code from other device" class="input-field">
+            <!-- Connection -->
+            <input type="text" id="peer-code" placeholder="Enter code from other device" class="input-field">
             <button class="btn btn-success" onclick="connectToPeer()" id="connect-btn">
-                🔗 Connect to Device
+                🔗 Connect
             </button>
             
-            <!-- Disconnect Button -->
+            <!-- Received Files -->
+            <div id="received-files" class="received-files"></div>
+            
+            <!-- Disconnect -->
             <button class="btn btn-danger hidden" onclick="disconnect()" id="disconnect-btn">
                 ❌ Disconnect
             </button>
@@ -375,168 +306,151 @@
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
-        class HighSpeedP2PTransfer {
+        class SimpleFileTransfer {
             constructor() {
                 this.peer = null;
                 this.connection = null;
-                this.isHost = false;
                 this.connectionCode = '';
-                this.files = [];
-                this.receivedFiles = new Map();
-                
-                // High-speed optimizations
-                this.chunkSize = 1024 * 1024; // 1MB chunks for maximum speed
-                this.maxParallelChunks = 10; // Send 10 chunks in parallel
-                this.sendQueue = [];
-                this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                
-                // Speed tracking
-                this.transferStats = {
-                    startTime: 0,
-                    bytesTransferred: 0,
-                    currentSpeed: 0,
-                    averageSpeed: 0
-                };
+                this.isConnected = false;
+                this.receivingFiles = new Map();
+                this.chunkSize = 64 * 1024; // 64KB chunks
                 
                 this.init();
             }
             
             init() {
-                this.setupEventListeners();
-                this.checkForConnectionCode();
-                this.log('High-speed system initialized');
+                this.setupDragDrop();
+                this.setupFileInput();
+                this.checkUrlCode();
+                this.log('System initialized');
             }
             
             log(message) {
-                console.log('[HS-P2P]', message);
+                console.log('[FileTransfer]', message);
             }
             
-            setupEventListeners() {
-                const fileInput = document.getElementById('file-input');
-                fileInput.addEventListener('change', (e) => {
-                    this.handleFiles(e.target.files);
+            setupDragDrop() {
+                const dropArea = document.getElementById('drop-area');
+                
+                dropArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropArea.classList.add('drag-over');
                 });
                 
-                // Drag and drop
-                const dropZone = document.getElementById('file-drop');
-                dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
-                dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
-                dropZone.addEventListener('drop', this.handleDrop.bind(this));
+                dropArea.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    dropArea.classList.remove('drag-over');
+                });
+                
+                dropArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropArea.classList.remove('drag-over');
+                    const files = e.dataTransfer.files;
+                    this.handleFiles(files);
+                });
+            }
+            
+            setupFileInput() {
+                document.getElementById('file-input').addEventListener('change', (e) => {
+                    this.handleFiles(e.target.files);
+                });
+            }
+            
+            checkUrlCode() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('connect');
+                if (code) {
+                    document.getElementById('peer-code').value = code;
+                    setTimeout(() => this.connectToPeer(), 1000);
+                }
             }
             
             generateCode() {
                 return Math.random().toString(36).substring(2, 8).toUpperCase();
             }
             
-            async startConnection() {
+            async startHost() {
                 try {
                     this.connectionCode = this.generateCode();
-                    this.showMessage('Starting high-speed connection...', 'info');
-                    this.log('Starting optimized peer connection');
+                    this.showMessage('Starting...', 'info');
                     
-                    // Optimized PeerJS configuration for maximum throughput
                     this.peer = new Peer(this.connectionCode, {
                         debug: 0,
                         config: {
-                            iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' },
-                                { urls: 'stun:stun1.l.google.com:19302' }
-                            ],
-                            // Optimize for high throughput
-                            sdpSemantics: 'unified-plan',
-                            bundlePolicy: 'max-bundle',
-                            rtcpMuxPolicy: 'require'
+                            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
                         }
                     });
                     
                     this.peer.on('open', (id) => {
-                        this.isHost = true;
+                        this.log(`Host started with ID: ${id}`);
+                        this.updateStatus('Waiting for connection...', 'waiting');
                         this.showConnectionCode();
-                        this.updateStatus('Waiting for high-speed connection...', 'waiting');
-                        this.showMessage('Waiting for other device to connect', 'info');
-                        this.log(`Peer opened with ID: ${id}`);
+                        this.showMessage('Share the code with other device', 'info');
                     });
                     
                     this.peer.on('connection', (conn) => {
-                        this.log('Incoming high-speed connection received');
+                        this.log('Someone connected');
                         this.connection = conn;
-                        this.setupHighSpeedConnection();
+                        this.setupConnection();
                     });
                     
                     this.peer.on('error', (err) => {
-                        this.log(`Peer error: ${err.type} - ${err.message}`);
-                        this.showMessage(`Error: ${err.type}`, 'error');
+                        this.log(`Peer error: ${err}`);
+                        this.showMessage('Connection failed. Try again.', 'error');
                         this.resetConnection();
                     });
                     
                 } catch (error) {
-                    this.log(`Start error: ${error.message}`);
-                    this.showMessage('Failed to start. Please try again.', 'error');
+                    this.log(`Start error: ${error}`);
+                    this.showMessage('Failed to start. Try again.', 'error');
                 }
             }
             
             async connectToPeer() {
                 const code = document.getElementById('peer-code').value.trim().toUpperCase();
                 if (!code) {
-                    this.showMessage('Please enter a connection code', 'error');
+                    this.showMessage('Please enter a code', 'error');
                     return;
                 }
                 
                 try {
-                    this.showMessage('Connecting at high speed...', 'info');
-                    this.log(`Attempting high-speed connection to: ${code}`);
+                    this.showMessage('Connecting...', 'info');
                     
                     this.peer = new Peer({
                         debug: 0,
                         config: {
-                            iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' },
-                                { urls: 'stun:stun1.l.google.com:19302' }
-                            ],
-                            sdpSemantics: 'unified-plan',
-                            bundlePolicy: 'max-bundle',
-                            rtcpMuxPolicy: 'require'
+                            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
                         }
                     });
                     
                     this.peer.on('open', () => {
-                        this.log('Peer opened, creating high-speed connection');
-                        this.connection = this.peer.connect(code, {
-                            reliable: true,
-                            // Optimize data channel for high throughput
-                            serialization: 'binary',
-                            metadata: { highSpeed: true }
-                        });
-                        this.setupHighSpeedConnection();
+                        this.log('Connecting to peer');
+                        this.connection = this.peer.connect(code);
+                        this.setupConnection();
                         this.updateStatus('Connecting...', 'waiting');
                     });
                     
                     this.peer.on('error', (err) => {
-                        this.log(`Connection error: ${err.type} - ${err.message}`);
-                        this.showMessage('Failed to connect. Check the code and try again.', 'error');
+                        this.log(`Connect error: ${err}`);
+                        this.showMessage('Failed to connect. Check code.', 'error');
                         this.resetConnection();
                     });
                     
                 } catch (error) {
-                    this.log(`Connect error: ${error.message}`);
-                    this.showMessage('Connection failed. Please try again.', 'error');
+                    this.log(`Connect error: ${error}`);
+                    this.showMessage('Connection failed. Try again.', 'error');
                 }
             }
             
-            setupHighSpeedConnection() {
-                if (!this.connection) {
-                    this.log('No connection to setup');
-                    return;
-                }
-                
-                this.log('Setting up high-speed connection handlers');
+            setupConnection() {
+                if (!this.connection) return;
                 
                 this.connection.on('open', () => {
-                    this.log('High-speed connection opened successfully');
-                    this.updateStatus('Connected at maximum speed!', 'connected');
-                    this.showMessage('⚡ High-speed connection established! Ready for rapid file transfer.', 'success');
+                    this.log('Connection established');
+                    this.isConnected = true;
+                    this.updateStatus('Connected!', 'connected');
+                    this.showMessage('✅ Connected! Ready to share files.', 'success');
                     this.enableFileSharing();
-                    this.updateSpeedIndicator('🚀 Ready for 100+ Mbps transfers');
                 });
                 
                 this.connection.on('data', (data) => {
@@ -544,28 +458,21 @@
                 });
                 
                 this.connection.on('close', () => {
-                    this.log('High-speed connection closed');
+                    this.log('Connection closed');
                     this.showMessage('Connection closed', 'error');
                     this.resetConnection();
                 });
                 
                 this.connection.on('error', (err) => {
                     this.log(`Connection error: ${err}`);
-                    this.showMessage('Connection error occurred', 'error');
+                    this.showMessage('Connection error', 'error');
                     this.resetConnection();
                 });
             }
             
-            updateSpeedIndicator(text) {
-                document.getElementById('speed-indicator').textContent = text;
-            }
-            
             showConnectionCode() {
                 document.getElementById('connection-code').textContent = this.connectionCode;
-                document.getElementById('connection-info').classList.remove('hidden');
-                
-                const shareUrl = `${window.location.origin}${window.location.pathname}?connect=${this.connectionCode}`;
-                document.getElementById('share-url-text').textContent = shareUrl;
+                document.getElementById('code-section').classList.remove('hidden');
             }
             
             updateStatus(message, state) {
@@ -574,14 +481,13 @@
                 const text = document.getElementById('device-text');
                 
                 circle.className = 'device-circle';
+                if (state) circle.classList.add(state);
                 
                 switch (state) {
                     case 'waiting':
-                        circle.classList.add('waiting');
                         text.textContent = 'WAITING';
                         break;
                     case 'connected':
-                        circle.classList.add('connected');
                         text.textContent = 'CONNECTED';
                         break;
                     default:
@@ -590,385 +496,227 @@
             }
             
             enableFileSharing() {
-                document.getElementById('select-btn').disabled = false;
+                document.getElementById('send-btn').disabled = false;
                 document.getElementById('connect-btn').classList.add('hidden');
                 document.getElementById('disconnect-btn').classList.remove('hidden');
-                document.getElementById('transfer-stats').classList.remove('hidden');
             }
             
             handleFiles(files) {
-                if (!this.connection) {
-                    this.showMessage('Please connect to a device first', 'error');
+                if (!this.isConnected) {
+                    this.showMessage('Please connect first', 'error');
                     return;
                 }
                 
-                this.files = Array.from(files);
-                this.log(`Selected ${this.files.length} files for high-speed transfer`);
-                this.displayFiles();
-                this.sendFilesHighSpeed();
-            }
-            
-            displayFiles() {
-                const fileList = document.getElementById('file-list');
-                fileList.innerHTML = '';
-                
-                this.files.forEach((file, index) => {
-                    const fileItem = document.createElement('div');
-                    fileItem.className = 'file-item';
-                    fileItem.innerHTML = `
-                        <div class="file-info">
-                            <div>
-                                <strong>${file.name}</strong><br>
-                                <small>${this.formatFileSize(file.size)}</small>
-                            </div>
-                        </div>
-                        <div class="parallel-indicator" id="parallel-${index}">
-                            🔄 Preparing parallel transfer...
-                        </div>
-                        <div class="progress">
-                            <div class="progress-bar" id="progress-${index}"></div>
-                        </div>
-                        <div class="progress-text" id="progress-text-${index}">
-                            <span>Preparing...</span>
-                            <span class="speed-display" id="speed-${index}">0 MB/s</span>
-                        </div>
-                    `;
-                    fileList.appendChild(fileItem);
+                Array.from(files).forEach((file, index) => {
+                    this.sendFile(file, index);
                 });
             }
             
-            async sendFilesHighSpeed() {
-                this.log('Starting high-speed file transfer');
-                this.transferStats.startTime = Date.now();
-                this.transferStats.bytesTransferred = 0;
+            async sendFile(file, index) {
+                this.log(`Sending file: ${file.name}`);
                 
-                for (let i = 0; i < this.files.length; i++) {
-                    await this.sendFileParallel(this.files[i], i);
-                }
-                
-                const totalTime = (Date.now() - this.transferStats.startTime) / 1000;
-                const avgSpeed = (this.transferStats.bytesTransferred / totalTime / 1024 / 1024).toFixed(2);
-                
-                this.showMessage(`🚀 All files sent at ${avgSpeed} MB/s average speed!`, 'success');
-                this.updateSpeedIndicator(`🎉 Transfer complete! Average: ${avgSpeed} MB/s`);
-            }
-            
-            async sendFileParallel(file, index) {
-                const progressBar = document.getElementById(`progress-${index}`);
-                const progressText = document.getElementById(`progress-text-${index}`);
-                const speedText = document.getElementById(`speed-${index}`);
-                const parallelIndicator = document.getElementById(`parallel-${index}`);
-                
-                this.log(`Sending file with parallel chunks: ${file.name} (${file.size} bytes)`);
+                // Show sending UI
+                const sendingContainer = document.getElementById('sending-files');
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-item';
+                fileDiv.id = `sending-${index}`;
+                fileDiv.innerHTML = `
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${this.formatFileSize(file.size)}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-${index}"></div>
+                    </div>
+                    <div class="progress-text" id="progress-text-${index}">Preparing...</div>
+                `;
+                sendingContainer.appendChild(fileDiv);
                 
                 // Send file metadata
-                const fileData = {
+                this.connection.send({
                     type: 'file-start',
                     name: file.name,
                     size: file.size,
-                    lastModified: file.lastModified,
-                    index: index,
-                    totalChunks: Math.ceil(file.size / this.chunkSize),
-                    chunkSize: this.chunkSize
-                };
+                    id: index
+                });
                 
-                this.connection.send(fileData);
-                progressText.innerHTML = '<span>Sending...</span><span class="speed-display">Starting...</span>';
-                
+                // Send file in chunks
                 const totalChunks = Math.ceil(file.size / this.chunkSize);
-                this.log(`File will be sent in ${totalChunks} chunks using ${this.maxParallelChunks} parallel streams`);
                 
-                parallelIndicator.textContent = `⚡ Using ${this.maxParallelChunks} parallel streams`;
-                
-                let chunksProcessed = 0;
-                let fileStartTime = Date.now();
-                let lastUpdateTime = Date.now();
-                let lastBytesTransferred = 0;
-                
-                // Process chunks in parallel batches
-                for (let batchStart = 0; batchStart < totalChunks; batchStart += this.maxParallelChunks) {
-                    const batchEnd = Math.min(batchStart + this.maxParallelChunks, totalChunks);
-                    const batch = [];
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * this.chunkSize;
+                    const end = Math.min(start + this.chunkSize, file.size);
+                    const chunk = file.slice(start, end);
                     
-                    // Create parallel chunk promises
-                    for (let i = batchStart; i < batchEnd; i++) {
-                        batch.push(this.sendChunkAsync(file, index, i, totalChunks));
-                    }
+                    const arrayBuffer = await chunk.arrayBuffer();
                     
-                    // Wait for all chunks in batch to complete
-                    await Promise.all(batch);
+                    this.connection.send({
+                        type: 'file-chunk',
+                        id: index,
+                        chunkIndex: i,
+                        data: arrayBuffer,
+                        isLast: i === totalChunks - 1
+                    });
                     
-                    chunksProcessed = batchEnd;
-                    const progress = (chunksProcessed / totalChunks) * 100;
-                    progressBar.style.width = `${progress}%`;
+                    // Update progress
+                    const progress = ((i + 1) / totalChunks) * 100;
+                    document.getElementById(`progress-${index}`).style.width = `${progress}%`;
+                    document.getElementById(`progress-text-${index}`).textContent = `${Math.round(progress)}%`;
                     
-                    // Calculate speed
-                    const currentTime = Date.now();
-                    const timeDiff = (currentTime - lastUpdateTime) / 1000;
-                    const bytesDiff = (chunksProcessed * this.chunkSize) - lastBytesTransferred;
-                    const speed = (bytesDiff / timeDiff / 1024 / 1024).toFixed(2);
-                    
-                    speedText.textContent = `${speed} MB/s`;
-                    progressText.innerHTML = `<span>${Math.round(progress)}% (${chunksProcessed}/${totalChunks})</span><span class="speed-display">${speed} MB/s</span>`;
-                    
-                    lastUpdateTime = currentTime;
-                    lastBytesTransferred = chunksProcessed * this.chunkSize;
-                    
-                    // Update global stats
-                    this.transferStats.bytesTransferred += bytesDiff;
-                    this.updateTransferStats();
+                    // Small delay to prevent overwhelming
+                    await new Promise(resolve => setTimeout(resolve, 1));
                 }
                 
-                const fileTime = (Date.now() - fileStartTime) / 1000;
-                const fileSpeed = (file.size / fileTime / 1024 / 1024).toFixed(2);
-                
-                this.log(`File ${file.name} sent at ${fileSpeed} MB/s`);
-                progressText.innerHTML = `<span>Complete!</span><span class="speed-display">${fileSpeed} MB/s</span>`;
-                parallelIndicator.textContent = `✅ Completed at ${fileSpeed} MB/s`;
-            }
-            
-            async sendChunkAsync(file, fileIndex, chunkIndex, totalChunks) {
-                const start = chunkIndex * this.chunkSize;
-                const end = Math.min(start + this.chunkSize, file.size);
-                const chunk = file.slice(start, end);
-                
-                const arrayBuffer = await chunk.arrayBuffer();
-                
-                const chunkData = {
-                    type: 'file-chunk',
-                    index: fileIndex,
-                    chunkIndex: chunkIndex,
-                    totalChunks: totalChunks,
-                    data: arrayBuffer,
-                    size: arrayBuffer.byteLength,
-                    isLast: chunkIndex === totalChunks - 1
-                };
-                
-                // Send immediately without delay
-                this.connection.send(chunkData);
-            }
-            
-            updateTransferStats() {
-                const statsContent = document.getElementById('stats-content');
-                const elapsed = (Date.now() - this.transferStats.startTime) / 1000;
-                const totalSpeed = (this.transferStats.bytesTransferred / elapsed / 1024 / 1024).toFixed(2);
-                
-                statsContent.innerHTML = `
-                    Speed: ${totalSpeed} MB/s | 
-                    Transferred: ${this.formatFileSize(this.transferStats.bytesTransferred)} | 
-                    Time: ${elapsed.toFixed(1)}s
-                `;
+                this.log(`File sent: ${file.name}`);
+                document.getElementById(`progress-text-${index}`).textContent = '✅ Sent!';
             }
             
             handleReceivedData(data) {
                 if (data.type === 'file-start') {
-                    this.log(`Starting to receive file: ${data.name}`);
-                    this.receivedFiles.set(data.index, {
+                    this.log(`Receiving file: ${data.name}`);
+                    
+                    this.receivingFiles.set(data.id, {
                         name: data.name,
                         size: data.size,
-                        lastModified: data.lastModified,
-                        totalChunks: data.totalChunks,
-                        chunkSize: data.chunkSize,
-                        chunks: new Array(data.totalChunks),
-                        receivedChunks: 0,
-                        startTime: Date.now()
+                        chunks: [],
+                        receivedSize: 0
                     });
-                    this.showMessage(`📥 Receiving: ${data.name} at high speed`, 'info');
+                    
                     this.showReceivingFile(data);
                     
                 } else if (data.type === 'file-chunk') {
-                    this.handleFileChunkHighSpeed(data);
+                    this.handleFileChunk(data);
                 }
             }
             
             showReceivingFile(fileInfo) {
-                const downloadList = document.getElementById('download-list');
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.id = `receiving-${fileInfo.index}`;
-                fileItem.innerHTML = `
-                    <div class="file-info">
-                        <div>
-                            <strong>📥 ${fileInfo.name}</strong><br>
-                            <small>${this.formatFileSize(fileInfo.size)}</small>
-                        </div>
+                const container = document.getElementById('received-files');
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-item';
+                fileDiv.id = `receiving-${fileInfo.id}`;
+                fileDiv.innerHTML = `
+                    <div class="file-name">📥 ${fileInfo.name}</div>
+                    <div class="file-size">${this.formatFileSize(fileInfo.size)}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="receive-progress-${fileInfo.id}"></div>
                     </div>
-                    <div class="parallel-indicator" id="receive-parallel-${fileInfo.index}">
-                        ⚡ Receiving via parallel streams...
-                    </div>
-                    <div class="progress">
-                        <div class="progress-bar" id="receive-progress-${fileInfo.index}"></div>
-                    </div>
-                    <div class="progress-text" id="receive-progress-text-${fileInfo.index}">
-                        <span>Receiving...</span>
-                        <span class="speed-display" id="receive-speed-${fileInfo.index}">0 MB/s</span>
-                    </div>
+                    <div class="progress-text" id="receive-text-${fileInfo.id}">Receiving...</div>
                 `;
-                downloadList.appendChild(fileItem);
+                container.appendChild(fileDiv);
             }
             
-            handleFileChunkHighSpeed(chunkData) {
-                const fileInfo = this.receivedFiles.get(chunkData.index);
-                if (!fileInfo) {
-                    this.log(`No file info for chunk ${chunkData.index}`);
-                    return;
-                }
+            handleFileChunk(chunkData) {
+                const fileInfo = this.receivingFiles.get(chunkData.id);
+                if (!fileInfo) return;
                 
-                // Store chunk at correct position
+                // Store chunk
                 fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
-                fileInfo.receivedChunks++;
+                fileInfo.receivedSize += chunkData.data.byteLength;
                 
-                const progress = (fileInfo.receivedChunks / fileInfo.totalChunks) * 100;
-                const progressBar = document.getElementById(`receive-progress-${chunkData.index}`);
-                const progressText = document.getElementById(`receive-progress-text-${chunkData.index}`);
-                const speedText = document.getElementById(`receive-speed-${chunkData.index}`);
+                // Update progress
+                const progress = (fileInfo.receivedSize / fileInfo.size) * 100;
+                document.getElementById(`receive-progress-${chunkData.id}`).style.width = `${progress}%`;
+                document.getElementById(`receive-text-${chunkData.id}`).textContent = `${Math.round(progress)}%`;
                 
-                if (progressBar) progressBar.style.width = `${progress}%`;
-                
-                // Calculate receive speed
-                const elapsed = (Date.now() - fileInfo.startTime) / 1000;
-                const bytesReceived = fileInfo.receivedChunks * fileInfo.chunkSize;
-                const speed = (bytesReceived / elapsed / 1024 / 1024).toFixed(2);
-                
-                if (speedText) speedText.textContent = `${speed} MB/s`;
-                if (progressText) {
-                    progressText.innerHTML = `<span>${Math.round(progress)}% (${fileInfo.receivedChunks}/${fileInfo.totalChunks})</span><span class="speed-display">${speed} MB/s</span>`;
-                }
-                
-                if (chunkData.isLast || fileInfo.receivedChunks === fileInfo.totalChunks) {
-                    const finalSpeed = (fileInfo.size / elapsed / 1024 / 1024).toFixed(2);
-                    this.log(`All chunks received for ${fileInfo.name} at ${finalSpeed} MB/s, assembling file`);
-                    this.assembleAndDownloadFile(fileInfo, chunkData.index);
+                // If last chunk, assemble file
+                if (chunkData.isLast) {
+                    this.assembleFile(chunkData.id, fileInfo);
                 }
             }
             
-            assembleAndDownloadFile(fileInfo, index) {
+            assembleFile(fileId, fileInfo) {
+                this.log(`Assembling file: ${fileInfo.name}`);
+                
                 try {
-                    this.log(`Assembling high-speed file: ${fileInfo.name}`);
-                    
-                    // Calculate total size from chunks
+                    // Calculate total size
                     let totalSize = 0;
-                    for (let chunk of fileInfo.chunks) {
+                    fileInfo.chunks.forEach(chunk => {
                         if (chunk) totalSize += chunk.length;
-                    }
+                    });
                     
-                    this.log(`Expected size: ${fileInfo.size}, Actual size: ${totalSize}`);
-                    
-                    // Assemble file efficiently
-                    const assembledFile = new Uint8Array(totalSize);
+                    // Assemble file
+                    const assembled = new Uint8Array(totalSize);
                     let offset = 0;
                     
-                    for (let i = 0; i < fileInfo.chunks.length; i++) {
-                        const chunk = fileInfo.chunks[i];
+                    fileInfo.chunks.forEach(chunk => {
                         if (chunk) {
-                            assembledFile.set(chunk, offset);
+                            assembled.set(chunk, offset);
                             offset += chunk.length;
-                        } else {
-                            this.log(`Missing chunk ${i} for ${fileInfo.name}`);
                         }
-                    }
+                    });
                     
-                    // Create blob and download
-                    const blob = new Blob([assembledFile]);
-                    const transferTime = (Date.now() - fileInfo.startTime) / 1000;
-                    const finalSpeed = (fileInfo.size / transferTime / 1024 / 1024).toFixed(2);
+                    // Create blob
+                    const blob = new Blob([assembled]);
+                    fileInfo.blob = blob;
                     
-                    this.log(`Created blob of size: ${blob.size} in ${transferTime}s at ${finalSpeed} MB/s`);
+                    this.log(`File assembled: ${fileInfo.name}, size: ${blob.size}`);
                     
-                    // Update UI
-                    const receivingItem = document.getElementById(`receiving-${index}`);
-                    if (receivingItem) {
-                        receivingItem.className = 'download-item';
-                        receivingItem.innerHTML = `
-                            <div class="file-info">
-                                <div>
-                                    <strong>✅ ${fileInfo.name}</strong><br>
-                                    <small>${this.formatFileSize(blob.size)} - Received at ${finalSpeed} MB/s</small>
-                                </div>
-                            </div>
-                            <button class="download-btn" onclick="p2p.downloadFile('${fileInfo.name}', ${index})">
-                                📥 Download File
-                            </button>
-                        `;
-                    }
+                    // Update UI to show download button
+                    const fileDiv = document.getElementById(`receiving-${fileId}`);
+                    fileDiv.className = 'download-item';
+                    fileDiv.innerHTML = `
+                        <div class="file-name">✅ ${fileInfo.name}</div>
+                        <div class="file-size">${this.formatFileSize(blob.size)}</div>
+                        <button class="btn btn-download" onclick="app.downloadFile(${fileId})">
+                            💾 Download File
+                        </button>
+                    `;
                     
-                    // Store blob for download
-                    this.receivedFiles.get(index).blob = blob;
-                    
-                    this.showMessage(`⚡ ${fileInfo.name} received at ${finalSpeed} MB/s!`, 'success');
-                    this.log(`File ${fileInfo.name} ready for download`);
+                    this.showMessage(`✅ ${fileInfo.name} ready to download!`, 'success');
                     
                 } catch (error) {
-                    this.log(`Error assembling file: ${error.message}`);
+                    this.log(`Assembly error: ${error}`);
                     this.showMessage(`Error receiving ${fileInfo.name}`, 'error');
                 }
             }
             
-            downloadFile(filename, index) {
-                const fileData = this.receivedFiles.get(index);
-                if (!fileData || !fileData.blob) {
-                    this.showMessage('File not available for download', 'error');
+            downloadFile(fileId) {
+                const fileInfo = this.receivingFiles.get(fileId);
+                if (!fileInfo || !fileInfo.blob) {
+                    this.showMessage('File not available', 'error');
                     return;
                 }
                 
                 try {
-                    if (this.isIOS && navigator.share) {
-                        const file = new File([fileData.blob], filename);
+                    // Check if iOS and has Web Share API
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    
+                    if (isIOS && navigator.share) {
+                        // Use Web Share API for iOS
+                        const file = new File([fileInfo.blob], fileInfo.name);
                         navigator.share({
                             files: [file],
-                            title: `Downloaded: ${filename}`
+                            title: fileInfo.name
                         }).then(() => {
-                            this.showMessage(`Shared: ${filename}`, 'success');
+                            this.showMessage(`Shared: ${fileInfo.name}`, 'success');
                         }).catch(err => {
-                            this.log(`iOS share failed: ${err.message}`);
-                            this.fallbackDownload(fileData.blob, filename);
+                            this.log(`Share failed: ${err}`);
+                            this.regularDownload(fileInfo.blob, fileInfo.name);
                         });
                     } else {
-                        this.fallbackDownload(fileData.blob, filename);
+                        // Regular download for other devices
+                        this.regularDownload(fileInfo.blob, fileInfo.name);
                     }
+                    
                 } catch (error) {
-                    this.log(`Download error: ${error.message}`);
+                    this.log(`Download error: ${error}`);
                     this.showMessage('Download failed', 'error');
                 }
             }
             
-            fallbackDownload(blob, filename) {
-                try {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    a.style.display = 'none';
-                    
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    
-                    setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    
-                    this.showMessage(`Downloaded: ${filename}`, 'success');
-                    this.log(`Download completed: ${filename}`);
-                    
-                } catch (error) {
-                    this.log(`Fallback download error: ${error.message}`);
-                    this.showMessage('Download failed', 'error');
-                }
-            }
-            
-            handleDragOver(e) {
-                e.preventDefault();
-                document.getElementById('file-drop').classList.add('drag-over');
-            }
-            
-            handleDragLeave(e) {
-                e.preventDefault();
-                document.getElementById('file-drop').classList.remove('drag-over');
-            }
-            
-            handleDrop(e) {
-                e.preventDefault();
-                document.getElementById('file-drop').classList.remove('drag-over');
-                this.handleFiles(e.dataTransfer.files);
+            regularDownload(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.style.display = 'none';
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                
+                this.showMessage(`Downloaded: ${filename}`, 'success');
+                this.log(`Download completed: ${filename}`);
             }
             
             disconnect() {
@@ -981,29 +729,17 @@
             resetConnection() {
                 this.peer = null;
                 this.connection = null;
-                this.isHost = false;
+                this.isConnected = false;
                 this.connectionCode = '';
-                this.files = [];
-                this.receivedFiles.clear();
+                this.receivingFiles.clear();
                 
-                this.updateStatus('Click START to begin', '');
-                this.updateSpeedIndicator('🚀 Optimized for 100+ Mbps transfers');
-                document.getElementById('connection-info').classList.add('hidden');
-                document.getElementById('select-btn').disabled = true;
+                this.updateStatus('Ready to start', '');
+                document.getElementById('code-section').classList.add('hidden');
+                document.getElementById('send-btn').disabled = true;
                 document.getElementById('connect-btn').classList.remove('hidden');
                 document.getElementById('disconnect-btn').classList.add('hidden');
-                document.getElementById('transfer-stats').classList.add('hidden');
-                document.getElementById('file-list').innerHTML = '';
-                document.getElementById('download-list').innerHTML = '';
-            }
-            
-            checkForConnectionCode() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const connectCode = urlParams.get('connect');
-                if (connectCode) {
-                    document.getElementById('peer-code').value = connectCode;
-                    setTimeout(() => this.connectToPeer(), 1000);
-                }
+                document.getElementById('sending-files').innerHTML = '';
+                document.getElementById('received-files').innerHTML = '';
             }
             
             formatFileSize(bytes) {
@@ -1027,18 +763,18 @@
                     if (container.contains(messageDiv)) {
                         container.removeChild(messageDiv);
                     }
-                }, 5000);
+                }, 4000);
             }
         }
         
-        // Initialize
-        const p2p = new HighSpeedP2PTransfer();
+        // Initialize app
+        const app = new SimpleFileTransfer();
         
         // Global functions
-        function startConnection() {
+        function startHost() {
             const deviceText = document.getElementById('device-text');
             if (deviceText.textContent === 'START') {
-                p2p.startConnection();
+                app.startHost();
             }
         }
         
@@ -1047,20 +783,11 @@
         }
         
         function connectToPeer() {
-            p2p.connectToPeer();
+            app.connectToPeer();
         }
         
         function disconnect() {
-            p2p.disconnect();
-        }
-        
-        function copyShareUrl() {
-            const shareUrl = document.getElementById('share-url-text').textContent;
-            navigator.clipboard.writeText(shareUrl).then(() => {
-                p2p.showMessage('Link copied to clipboard!', 'success');
-            }).catch(() => {
-                p2p.showMessage('Failed to copy link', 'error');
-            });
+            app.disconnect();
         }
     </script>
 </body>
