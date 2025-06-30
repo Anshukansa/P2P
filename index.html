@@ -313,7 +313,10 @@
                 this.connectionCode = '';
                 this.isConnected = false;
                 this.receivingFiles = new Map();
-                this.chunkSize = 64 * 1024; // 64KB chunks
+                
+                // iOS Safari needs smaller chunks for large files
+                this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                this.chunkSize = this.isIOS ? 16 * 1024 : 64 * 1024; // 16KB for iOS, 64KB for others
                 
                 this.init();
             }
@@ -535,56 +538,131 @@
                     type: 'file-start',
                     name: file.name,
                     size: file.size,
-                    id: index
+                    id: index,
+                    isFromIOS: this.isIOS
                 });
                 
                 // Send file in chunks
                 const totalChunks = Math.ceil(file.size / this.chunkSize);
+                this.log(`Sending ${totalChunks} chunks, chunk size: ${this.chunkSize}`);
                 
                 for (let i = 0; i < totalChunks; i++) {
-                    const start = i * this.chunkSize;
-                    const end = Math.min(start + this.chunkSize, file.size);
-                    const chunk = file.slice(start, end);
-                    
-                    const arrayBuffer = await chunk.arrayBuffer();
-                    
-                    this.connection.send({
-                        type: 'file-chunk',
-                        id: index,
-                        chunkIndex: i,
-                        data: arrayBuffer,
-                        isLast: i === totalChunks - 1
-                    });
-                    
-                    // Update progress
-                    const progress = ((i + 1) / totalChunks) * 100;
-                    document.getElementById(`progress-${index}`).style.width = `${progress}%`;
-                    document.getElementById(`progress-text-${index}`).textContent = `${Math.round(progress)}%`;
-                    
-                    // Small delay to prevent overwhelming
-                    await new Promise(resolve => setTimeout(resolve, 1));
+                    try {
+                        const start = i * this.chunkSize;
+                        const end = Math.min(start + this.chunkSize, file.size);
+                        const chunk = file.slice(start, end);
+                        
+                        // Convert to ArrayBuffer with iOS-specific handling
+                        let arrayBuffer;
+                        if (this.isIOS) {
+                            // iOS Safari needs special handling
+                            arrayBuffer = await this.readChunkAsArrayBuffer(chunk);
+                        } else {
+                            arrayBuffer = await chunk.arrayBuffer();
+                        }
+                        
+                        // Send chunk with verification
+                        const chunkData = {
+                            type: 'file-chunk',
+                            id: index,
+                            chunkIndex: i,
+                            totalChunks: totalChunks,
+                            data: arrayBuffer,
+                            size: arrayBuffer.byteLength,
+                            isLast: i === totalChunks - 1
+                        };
+                        
+                        this.connection.send(chunkData);
+                        
+                        // Update progress
+                        const progress = ((i + 1) / totalChunks) * 100;
+                        document.getElementById(`progress-${index}`).style.width = `${progress}%`;
+                        document.getElementById(`progress-text-${index}`).textContent = `${Math.round(progress)}% (${i + 1}/${totalChunks})`;
+                        
+                        // iOS needs more delay to prevent overwhelming
+                        const delay = this.isIOS ? 10 : 1;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        
+                    } catch (error) {
+                        this.log(`Error sending chunk ${i}: ${error}`);
+                        this.showMessage(`Error sending ${file.name}`, 'error');
+                        return;
+                    }
                 }
                 
                 this.log(`File sent: ${file.name}`);
                 document.getElementById(`progress-text-${index}`).textContent = '✅ Sent!';
             }
             
+            // iOS-specific ArrayBuffer reading
+            async readChunkAsArrayBuffer(chunk) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsArrayBuffer(chunk);
+                });
+            }
+            
             handleReceivedData(data) {
                 if (data.type === 'file-start') {
-                    this.log(`Receiving file: ${data.name}`);
+                    this.log(`Receiving file: ${data.name} (from iOS: ${data.isFromIOS})`);
+                    
+                    const totalChunks = Math.ceil(data.size / (data.isFromIOS ? 16 * 1024 : 64 * 1024));
                     
                     this.receivingFiles.set(data.id, {
                         name: data.name,
                         size: data.size,
-                        chunks: [],
-                        receivedSize: 0
+                        chunks: new Array(totalChunks).fill(null),
+                        receivedChunks: 0,
+                        totalChunks: totalChunks,
+                        isFromIOS: data.isFromIOS,
+                        lastUpdate: Date.now(),
+                        startTime: Date.now()
                     });
                     
                     this.showReceivingFile(data);
                     
+                    // Set up timeout check for stalled transfers
+                    this.setupTransferTimeout(data.id);
+                    
                 } else if (data.type === 'file-chunk') {
                     this.handleFileChunk(data);
                 }
+            }
+            
+            setupTransferTimeout(fileId) {
+                // Check for stalled transfers every 10 seconds
+                const checkInterval = setInterval(() => {
+                    const fileInfo = this.receivingFiles.get(fileId);
+                    if (!fileInfo) {
+                        clearInterval(checkInterval);
+                        return;
+                    }
+                    
+                    const timeSinceUpdate = Date.now() - fileInfo.lastUpdate;
+                    const totalTime = Date.now() - fileInfo.startTime;
+                    
+                    // If no update for 30 seconds and transfer incomplete
+                    if (timeSinceUpdate > 30000 && fileInfo.receivedChunks < fileInfo.totalChunks) {
+                        this.log(`Transfer timeout for ${fileInfo.name}`);
+                        this.showMessage(`Transfer timeout for ${fileInfo.name}. Please try again.`, 'error');
+                        
+                        // Update UI to show error
+                        const fileDiv = document.getElementById(`receiving-${fileId}`);
+                        if (fileDiv) {
+                            const textElement = document.getElementById(`receive-text-${fileId}`);
+                            if (textElement) textElement.textContent = '❌ Transfer failed - timeout';
+                        }
+                        
+                        clearInterval(checkInterval);
+                    }
+                    
+                    // Clear interval if file is complete or too much time passed
+                    if (fileInfo.receivedChunks === fileInfo.totalChunks || totalTime > 300000) {
+                        clearInterval(checkInterval);
+                    }
+                }, 10000);
             }
             
             showReceivingFile(fileInfo) {
@@ -598,27 +676,54 @@
                     <div class="progress-bar">
                         <div class="progress-fill" id="receive-progress-${fileInfo.id}"></div>
                     </div>
-                    <div class="progress-text" id="receive-text-${fileInfo.id}">Receiving...</div>
+                    <div class="progress-text" id="receive-text-${fileInfo.id}">Starting...</div>
                 `;
                 container.appendChild(fileDiv);
+                
+                this.showMessage(`📥 Receiving ${fileInfo.name}...`, 'info');
             }
             
             handleFileChunk(chunkData) {
                 const fileInfo = this.receivingFiles.get(chunkData.id);
-                if (!fileInfo) return;
+                if (!fileInfo) {
+                    this.log(`No file info for chunk ${chunkData.id}`);
+                    return;
+                }
                 
-                // Store chunk
-                fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
-                fileInfo.receivedSize += chunkData.data.byteLength;
+                // Validate chunk data
+                if (!chunkData.data || chunkData.data.byteLength === 0) {
+                    this.log(`Invalid chunk data for ${fileInfo.name}`);
+                    return;
+                }
+                
+                // Store chunk at correct position
+                if (!fileInfo.chunks[chunkData.chunkIndex]) {
+                    fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
+                    fileInfo.receivedChunks++;
+                    fileInfo.lastUpdate = Date.now();
+                    
+                    this.log(`Received chunk ${chunkData.chunkIndex + 1}/${fileInfo.totalChunks} for ${fileInfo.name}`);
+                }
                 
                 // Update progress
-                const progress = (fileInfo.receivedSize / fileInfo.size) * 100;
-                document.getElementById(`receive-progress-${chunkData.id}`).style.width = `${progress}%`;
-                document.getElementById(`receive-text-${chunkData.id}`).textContent = `${Math.round(progress)}%`;
+                const progress = (fileInfo.receivedChunks / fileInfo.totalChunks) * 100;
+                const progressElement = document.getElementById(`receive-progress-${chunkData.id}`);
+                const textElement = document.getElementById(`receive-text-${chunkData.id}`);
                 
-                // If last chunk, assemble file
-                if (chunkData.isLast) {
-                    this.assembleFile(chunkData.id, fileInfo);
+                if (progressElement) progressElement.style.width = `${progress}%`;
+                if (textElement) textElement.textContent = `${Math.round(progress)}% (${fileInfo.receivedChunks}/${fileInfo.totalChunks})`;
+                
+                // Check if all chunks received
+                const allReceived = fileInfo.receivedChunks === fileInfo.totalChunks;
+                const isLastChunk = chunkData.isLast;
+                
+                if (allReceived || isLastChunk) {
+                    this.log(`All chunks received for ${fileInfo.name}: ${fileInfo.receivedChunks}/${fileInfo.totalChunks}`);
+                    
+                    // Small delay to ensure all chunks are processed
+                    setTimeout(() => {
+                        this.assembleFile(chunkData.id, fileInfo);
+                    }, 100);
                 }
             }
             
@@ -626,28 +731,45 @@
                 this.log(`Assembling file: ${fileInfo.name}`);
                 
                 try {
-                    // Calculate total size
+                    // Check for missing chunks
+                    const missingChunks = [];
+                    for (let i = 0; i < fileInfo.totalChunks; i++) {
+                        if (!fileInfo.chunks[i]) {
+                            missingChunks.push(i);
+                        }
+                    }
+                    
+                    if (missingChunks.length > 0) {
+                        this.log(`Missing chunks for ${fileInfo.name}: ${missingChunks.join(', ')}`);
+                        this.showMessage(`Transfer incomplete for ${fileInfo.name}. Missing ${missingChunks.length} chunks.`, 'error');
+                        return;
+                    }
+                    
+                    // Calculate total size from received chunks
                     let totalSize = 0;
                     fileInfo.chunks.forEach(chunk => {
                         if (chunk) totalSize += chunk.length;
                     });
                     
+                    this.log(`Expected size: ${fileInfo.size}, Received size: ${totalSize}`);
+                    
                     // Assemble file
                     const assembled = new Uint8Array(totalSize);
                     let offset = 0;
                     
-                    fileInfo.chunks.forEach(chunk => {
+                    for (let i = 0; i < fileInfo.chunks.length; i++) {
+                        const chunk = fileInfo.chunks[i];
                         if (chunk) {
                             assembled.set(chunk, offset);
                             offset += chunk.length;
                         }
-                    });
+                    }
                     
                     // Create blob
                     const blob = new Blob([assembled]);
                     fileInfo.blob = blob;
                     
-                    this.log(`File assembled: ${fileInfo.name}, size: ${blob.size}`);
+                    this.log(`File assembled successfully: ${fileInfo.name}, final size: ${blob.size}`);
                     
                     // Update UI to show download button
                     const fileDiv = document.getElementById(`receiving-${fileId}`);
@@ -663,8 +785,8 @@
                     this.showMessage(`✅ ${fileInfo.name} ready to download!`, 'success');
                     
                 } catch (error) {
-                    this.log(`Assembly error: ${error}`);
-                    this.showMessage(`Error receiving ${fileInfo.name}`, 'error');
+                    this.log(`Assembly error for ${fileInfo.name}: ${error.message}`);
+                    this.showMessage(`Error receiving ${fileInfo.name}: ${error.message}`, 'error');
                 }
             }
             
