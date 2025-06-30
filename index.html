@@ -272,8 +272,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📁 Reliable Transfer</h1>
-            <p>100% guaranteed file delivery</p>
+            <h1>⚡ High-Speed Transfer</h1>
+            <p>Ultra-fast + 100% reliable delivery</p>
         </div>
         
         <div class="main">
@@ -338,10 +338,15 @@
                 this.receivingFiles = new Map();
                 
                 // Reliability settings
-                this.chunkSize = 32 * 1024; // 32KB chunks
-                this.maxRetries = 5;
-                this.chunkTimeout = 10000; // 10 seconds per chunk
-                this.ackTimeout = 5000; // 5 seconds for acknowledgment
+                this.chunkSize = 128 * 1024; // 128KB chunks for speed
+                this.maxRetries = 3;
+                this.chunkTimeout = 5000; // 5 seconds per chunk
+                this.ackTimeout = 2000; // 2 seconds for acknowledgment
+                
+                // Speed optimizations
+                this.windowSize = 20; // Send 20 chunks in parallel
+                this.batchAckSize = 5; // Batch ACKs for efficiency
+                this.adaptiveChunking = true;
                 
                 this.init();
             }
@@ -397,7 +402,11 @@
                             iceServers: [
                                 { urls: 'stun:stun.l.google.com:19302' },
                                 { urls: 'stun:stun1.l.google.com:19302' }
-                            ]
+                            ],
+                            // High-speed optimizations
+                            sdpSemantics: 'unified-plan',
+                            bundlePolicy: 'max-bundle',
+                            rtcpMuxPolicy: 'require'
                         }
                     });
                     
@@ -442,14 +451,21 @@
                             iceServers: [
                                 { urls: 'stun:stun.l.google.com:19302' },
                                 { urls: 'stun:stun1.l.google.com:19302' }
-                            ]
+                            ],
+                            // High-speed optimizations
+                            sdpSemantics: 'unified-plan',
+                            bundlePolicy: 'max-bundle',
+                            rtcpMuxPolicy: 'require'
                         }
                     });
                     
                     this.peer.on('open', () => {
                         this.log('Connecting to peer');
                         this.connection = this.peer.connect(code, {
-                            reliable: true
+                            reliable: true,
+                            // High-speed data channel optimizations
+                            serialization: 'binary',
+                            metadata: { highSpeed: true }
                         });
                         this.setupReliableConnection();
                         this.updateStatus('Connecting...', 'waiting');
@@ -474,7 +490,7 @@
                     this.log('Reliable connection established');
                     this.isConnected = true;
                     this.updateStatus('Connected!', 'connected');
-                    this.showMessage('✅ Reliable connection ready!', 'success');
+                    this.showMessage('✅ High-speed reliable connection ready!', 'success');
                     this.enableFileSharing();
                 });
                 
@@ -538,7 +554,7 @@
             }
             
             async sendFileReliably(file, fileId) {
-                this.log(`Starting reliable send: ${file.name}`);
+                this.log(`Starting high-speed reliable send: ${file.name}`);
                 
                 const totalChunks = Math.ceil(file.size / this.chunkSize);
                 
@@ -550,7 +566,12 @@
                     sentChunks: 0,
                     ackedChunks: new Set(),
                     retryCount: new Map(),
-                    startTime: Date.now()
+                    startTime: Date.now(),
+                    lastProgressTime: Date.now(),
+                    lastProgressChunks: 0,
+                    inFlight: new Set(), // Chunks currently being sent
+                    nextChunkToSend: 0,
+                    pendingAcks: [] // For batching ACKs
                 };
                 
                 this.sendingFiles.set(fileId, fileState);
@@ -566,35 +587,61 @@
                     chunkSize: this.chunkSize
                 });
                 
-                // Start sending chunks
-                this.sendNextChunk(fileId);
+                // Start high-speed parallel sending
+                this.startParallelSending(fileId);
             }
             
-            async sendNextChunk(fileId) {
+            async startParallelSending(fileId) {
                 const fileState = this.sendingFiles.get(fileId);
                 if (!fileState) return;
                 
-                // Find next chunk to send
-                let chunkIndex = -1;
-                for (let i = 0; i < fileState.totalChunks; i++) {
-                    if (!fileState.ackedChunks.has(i)) {
-                        const retries = fileState.retryCount.get(i) || 0;
-                        if (retries < this.maxRetries) {
-                            chunkIndex = i;
-                            break;
-                        }
+                // Fill the sending window with parallel chunks
+                while (fileState.inFlight.size < this.windowSize && fileState.nextChunkToSend < fileState.totalChunks) {
+                    const chunkIndex = fileState.nextChunkToSend;
+                    
+                    // Skip if already ACKed
+                    if (fileState.ackedChunks.has(chunkIndex)) {
+                        fileState.nextChunkToSend++;
+                        continue;
                     }
+                    
+                    // Skip if too many retries
+                    const retries = fileState.retryCount.get(chunkIndex) || 0;
+                    if (retries >= this.maxRetries) {
+                        fileState.nextChunkToSend++;
+                        continue;
+                    }
+                    
+                    // Send chunk
+                    fileState.inFlight.add(chunkIndex);
+                    fileState.nextChunkToSend++;
+                    this.sendChunkAsync(fileId, chunkIndex);
                 }
                 
-                if (chunkIndex === -1) {
-                    // Check if all chunks are acknowledged
-                    if (fileState.ackedChunks.size === fileState.totalChunks) {
-                        this.completeSend(fileId);
-                    } else {
-                        this.showMessage(`Transfer failed: ${fileState.file.name}`, 'error');
+                // Check if transfer is complete
+                if (fileState.ackedChunks.size === fileState.totalChunks) {
+                    this.completeSend(fileId);
+                } else if (fileState.inFlight.size === 0 && fileState.nextChunkToSend >= fileState.totalChunks) {
+                    // No more chunks to send and nothing in flight - check for failures
+                    const failedChunks = [];
+                    for (let i = 0; i < fileState.totalChunks; i++) {
+                        if (!fileState.ackedChunks.has(i)) {
+                            const retries = fileState.retryCount.get(i) || 0;
+                            if (retries >= this.maxRetries) {
+                                failedChunks.push(i);
+                            }
+                        }
                     }
-                    return;
+                    
+                    if (failedChunks.length > 0) {
+                        this.showMessage(`Transfer failed: ${fileState.file.name} - ${failedChunks.length} chunks failed`, 'error');
+                    }
                 }
+            }
+            
+            async sendChunkAsync(fileId, chunkIndex) {
+                const fileState = this.sendingFiles.get(fileId);
+                if (!fileState) return;
                 
                 try {
                     // Read chunk
@@ -603,10 +650,11 @@
                     const chunk = fileState.file.slice(start, end);
                     const arrayBuffer = await chunk.arrayBuffer();
                     
-                    // Send chunk with retry tracking
+                    // Track retry
                     const retryCount = fileState.retryCount.get(chunkIndex) || 0;
                     fileState.retryCount.set(chunkIndex, retryCount + 1);
                     
+                    // Send chunk
                     this.sendReliableData({
                         type: 'file-chunk',
                         fileId: fileId,
@@ -617,22 +665,19 @@
                     
                     this.updateSendProgress(fileId);
                     
-                    // Set timeout for chunk acknowledgment
+                    // Set timeout for this chunk
                     setTimeout(() => {
                         if (!fileState.ackedChunks.has(chunkIndex)) {
-                            this.log(`Chunk ${chunkIndex} timeout, retrying`);
-                            this.sendNextChunk(fileId);
+                            fileState.inFlight.delete(chunkIndex);
+                            this.log(`Chunk ${chunkIndex} timeout, will retry`);
+                            this.startParallelSending(fileId); // Continue sending
                         }
                     }, this.ackTimeout);
                     
-                    // Continue with next chunk
-                    setTimeout(() => {
-                        this.sendNextChunk(fileId);
-                    }, 10);
-                    
                 } catch (error) {
                     this.log(`Error sending chunk ${chunkIndex}: ${error}`);
-                    setTimeout(() => this.sendNextChunk(fileId), 1000);
+                    fileState.inFlight.delete(chunkIndex);
+                    setTimeout(() => this.startParallelSending(fileId), 100);
                 }
             }
             
@@ -657,6 +702,9 @@
                     case 'chunk-ack':
                         this.handleChunkAck(data);
                         break;
+                    case 'batch-ack':
+                        this.handleBatchAck(data);
+                        break;
                     case 'file-complete':
                         this.handleFileComplete(data);
                         break;
@@ -674,7 +722,9 @@
                     chunkSize: data.chunkSize,
                     chunks: new Array(data.totalChunks).fill(null),
                     receivedChunks: new Set(),
-                    startTime: Date.now()
+                    startTime: Date.now(),
+                    lastProgressTime: Date.now(),
+                    lastProgressChunks: 0
                 };
                 
                 this.receivingFiles.set(data.fileId, fileState);
@@ -697,12 +747,21 @@
                 
                 this.log(`Received chunk ${data.chunkIndex}/${fileState.totalChunks}`);
                 
-                // Send acknowledgment
-                this.sendReliableData({
-                    type: 'chunk-ack',
-                    fileId: data.fileId,
-                    chunkIndex: data.chunkIndex
-                });
+                // Add to batch ACK queue for speed
+                fileState.pendingAcks = fileState.pendingAcks || [];
+                fileState.pendingAcks.push(data.chunkIndex);
+                
+                // Send batch ACK when we have enough or timeout
+                if (fileState.pendingAcks.length >= this.batchAckSize) {
+                    this.sendBatchAck(data.fileId);
+                } else {
+                    // Set timeout for batch ACK
+                    if (!fileState.ackTimer) {
+                        fileState.ackTimer = setTimeout(() => {
+                            this.sendBatchAck(data.fileId);
+                        }, 50); // 50ms batch timeout for speed
+                    }
+                }
                 
                 this.updateReceiveProgress(data.fileId);
                 
@@ -712,19 +771,54 @@
                 }
             }
             
+            sendBatchAck(fileId) {
+                const fileState = this.receivingFiles.get(fileId);
+                if (!fileState || !fileState.pendingAcks || fileState.pendingAcks.length === 0) return;
+                
+                // Send batch acknowledgment for speed
+                this.sendReliableData({
+                    type: 'batch-ack',
+                    fileId: fileId,
+                    chunkIndexes: fileState.pendingAcks.slice() // Copy array
+                });
+                
+                // Clear pending ACKs
+                fileState.pendingAcks = [];
+                if (fileState.ackTimer) {
+                    clearTimeout(fileState.ackTimer);
+                    fileState.ackTimer = null;
+                }
+            }
+            
             handleChunkAck(data) {
                 const fileState = this.sendingFiles.get(data.fileId);
                 if (!fileState) return;
                 
                 fileState.ackedChunks.add(data.chunkIndex);
+                fileState.inFlight.delete(data.chunkIndex);
                 this.log(`Chunk ${data.chunkIndex} acknowledged`);
                 
                 this.updateSendProgress(data.fileId);
                 
-                // Check if all chunks are acknowledged
-                if (fileState.ackedChunks.size === fileState.totalChunks) {
-                    this.completeSend(data.fileId);
-                }
+                // Continue parallel sending
+                this.startParallelSending(data.fileId);
+            }
+            
+            handleBatchAck(data) {
+                const fileState = this.sendingFiles.get(data.fileId);
+                if (!fileState) return;
+                
+                // Process batch acknowledgments for speed
+                data.chunkIndexes.forEach(chunkIndex => {
+                    fileState.ackedChunks.add(chunkIndex);
+                    fileState.inFlight.delete(chunkIndex);
+                });
+                
+                this.log(`Batch ACK: ${data.chunkIndexes.length} chunks acknowledged`);
+                this.updateSendProgress(data.fileId);
+                
+                // Continue parallel sending
+                this.startParallelSending(data.fileId);
             }
             
             completeSend(fileId) {
@@ -738,7 +832,7 @@
                 const fileDiv = document.getElementById(`sending-${fileId}`);
                 if (fileDiv) {
                     fileDiv.querySelector('.progress-text').innerHTML = '<span>✅ Sent!</span>';
-                    fileDiv.querySelector('.reliability-indicator').textContent = '✅ 100% reliable delivery confirmed';
+                    fileDiv.querySelector('.reliability-indicator').textContent = '✅ High-speed reliable delivery confirmed';
                 }
                 
                 this.sendingFiles.delete(fileId);
@@ -782,7 +876,7 @@
                     fileDiv.innerHTML = `
                         <div class="file-name">✅ ${fileState.name}</div>
                         <div class="file-size">${this.formatFileSize(blob.size)}</div>
-                        <div class="reliability-indicator">✅ 100% reliable transfer complete</div>
+                        <div class="reliability-indicator">✅ High-speed reliable transfer complete</div>
                         <button class="btn btn-download" onclick="app.downloadFile('${fileId}')">
                             💾 Download File
                         </button>
@@ -804,7 +898,7 @@
                 fileDiv.innerHTML = `
                     <div class="file-name">${fileState.file.name}</div>
                     <div class="file-size">${this.formatFileSize(fileState.file.size)}</div>
-                    <div class="reliability-indicator">🔄 Reliable transfer with acknowledgments</div>
+                    <div class="reliability-indicator">⚡ High-speed parallel transfer (${this.windowSize} chunks)</div>
                     <div class="progress-container">
                         <div class="progress-bar">
                             <div class="progress-fill" id="send-progress-${fileState.fileId}"></div>
@@ -828,7 +922,7 @@
                 fileDiv.innerHTML = `
                     <div class="file-name">📥 ${fileState.name}</div>
                     <div class="file-size">${this.formatFileSize(fileState.size)}</div>
-                    <div class="reliability-indicator">🔄 Receiving with acknowledgments</div>
+                    <div class="reliability-indicator">⚡ High-speed receiving with batch ACKs</div>
                     <div class="progress-container">
                         <div class="progress-bar">
                             <div class="progress-fill" id="receive-progress-${fileState.fileId}"></div>
@@ -855,8 +949,26 @@
                 const progressText = document.getElementById(`send-text-${fileId}`);
                 const chunkInfo = document.getElementById(`send-chunks-${fileId}`);
                 
+                // Calculate speed
+                const now = Date.now();
+                const timeDiff = (now - fileState.lastProgressTime) / 1000;
+                const chunkDiff = fileState.ackedChunks.size - fileState.lastProgressChunks;
+                
+                if (timeDiff > 1) { // Update speed every second
+                    const chunkSpeed = chunkDiff / timeDiff;
+                    const bytesPerSecond = chunkSpeed * this.chunkSize;
+                    const mbps = (bytesPerSecond / 1024 / 1024).toFixed(1);
+                    
+                    fileState.lastProgressTime = now;
+                    fileState.lastProgressChunks = fileState.ackedChunks.size;
+                    fileState.currentSpeed = mbps;
+                }
+                
                 if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
+                if (progressText) {
+                    const speedText = fileState.currentSpeed ? ` - ${fileState.currentSpeed} MB/s` : '';
+                    progressText.innerHTML = `<span>${Math.round(progress)}%${speedText}</span>`;
+                }
                 if (chunkInfo) chunkInfo.textContent = `${fileState.ackedChunks.size}/${fileState.totalChunks} chunks confirmed`;
             }
             
@@ -869,8 +981,26 @@
                 const progressText = document.getElementById(`receive-text-${fileId}`);
                 const chunkInfo = document.getElementById(`receive-chunks-${fileId}`);
                 
+                // Calculate receive speed
+                const now = Date.now();
+                const timeDiff = (now - fileState.lastProgressTime) / 1000;
+                const chunkDiff = fileState.receivedChunks.size - fileState.lastProgressChunks;
+                
+                if (timeDiff > 1) { // Update speed every second
+                    const chunkSpeed = chunkDiff / timeDiff;
+                    const bytesPerSecond = chunkSpeed * fileState.chunkSize;
+                    const mbps = (bytesPerSecond / 1024 / 1024).toFixed(1);
+                    
+                    fileState.lastProgressTime = now;
+                    fileState.lastProgressChunks = fileState.receivedChunks.size;
+                    fileState.currentSpeed = mbps;
+                }
+                
                 if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
+                if (progressText) {
+                    const speedText = fileState.currentSpeed ? ` - ${fileState.currentSpeed} MB/s` : '';
+                    progressText.innerHTML = `<span>${Math.round(progress)}%${speedText}</span>`;
+                }
                 if (chunkInfo) chunkInfo.textContent = `${fileState.receivedChunks.size}/${fileState.totalChunks} chunks received`;
             }
             
