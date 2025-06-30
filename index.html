@@ -342,6 +342,19 @@
             border: 1px solid rgba(59, 130, 246, 0.2);
         }
         
+        .platform-badge {
+            display: inline-block;
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+        
         .hidden {
             display: none;
         }
@@ -403,6 +416,9 @@
         </div>
         
         <div class="main">
+            <!-- Platform Detection -->
+            <div class="platform-badge" id="platform-badge">Detecting platform...</div>
+            
             <!-- Status Section -->
             <div class="status-section">
                 <div class="status-text" id="status-text">Tap the circle to start</div>
@@ -458,7 +474,7 @@
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
-        class SimpleP2PTransfer {
+        class CrossPlatformFileTransfer {
             constructor() {
                 this.peer = null;
                 this.connection = null;
@@ -467,13 +483,72 @@
                 this.files = [];
                 this.receivedFiles = new Map();
                 this.chunkSize = 16384; // 16KB chunks
+                this.platform = this.detectPlatform();
                 
                 this.init();
             }
             
+            detectPlatform() {
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isIOS = /ipad|iphone|ipod/.test(userAgent);
+                const isAndroid = /android/.test(userAgent);
+                const isWindows = /windows/.test(userAgent);
+                const isMobile = /mobile|tablet|ipad|ipod|iphone|android/.test(userAgent);
+                const isSafari = /safari/.test(userAgent) && !/chrome/.test(userAgent);
+                
+                return {
+                    isIOS,
+                    isAndroid,
+                    isWindows,
+                    isMobile,
+                    isSafari,
+                    supportsWebShare: this.checkWebShareSupport(),
+                    supportsWebShareFiles: this.checkWebShareFilesSupport(),
+                    name: isIOS ? 'iOS' : isAndroid ? 'Android' : isWindows ? 'Windows' : 'Desktop'
+                };
+            }
+            
+            checkWebShareSupport() {
+                return 'share' in navigator;
+            }
+            
+            checkWebShareFilesSupport() {
+                return 'canShare' in navigator && navigator.canShare({ files: [new File([''], 'test.txt')] });
+            }
+            
             init() {
                 this.setupEventListeners();
+                this.updatePlatformBadge();
                 this.checkForConnectionCode();
+                this.optimizeForPlatform();
+            }
+            
+            updatePlatformBadge() {
+                const badge = document.getElementById('platform-badge');
+                let badgeText = this.platform.name;
+                
+                if (this.platform.supportsWebShareFiles) {
+                    badgeText += ' • Web Share ✓';
+                } else if (this.platform.supportsWebShare) {
+                    badgeText += ' • Basic Share ✓';
+                } else {
+                    badgeText += ' • Download Mode';
+                }
+                
+                badge.textContent = badgeText;
+            }
+            
+            optimizeForPlatform() {
+                if (this.platform.isIOS && !this.platform.supportsWebShareFiles) {
+                    // For older iOS versions, add specific instructions
+                    const dropText = document.querySelector('.file-drop-text');
+                    dropText.textContent = 'Tap to select files (iOS compatibility mode)';
+                }
+                
+                if (this.platform.isAndroid && !this.platform.supportsWebShare) {
+                    // For older Android browsers
+                    this.showMessage('Using download mode for your browser', 'info');
+                }
             }
             
             setupEventListeners() {
@@ -503,7 +578,8 @@
                         debug: 0,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
                             ]
                         }
                     });
@@ -546,7 +622,8 @@
                         debug: 0,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
                             ]
                         }
                     });
@@ -674,6 +751,7 @@
                     type: 'file-start',
                     name: file.name,
                     size: file.size,
+                    type: file.type,
                     index: index
                 });
                 
@@ -707,6 +785,7 @@
                     this.receivedFiles.set(data.index, {
                         name: data.name,
                         size: data.size,
+                        type: data.type || 'application/octet-stream',
                         chunks: []
                     });
                     this.showMessage(`Receiving: ${data.name}`, 'info');
@@ -716,13 +795,13 @@
                         fileData.chunks[data.chunkIndex] = new Uint8Array(data.data);
                         
                         if (data.isLast) {
-                            this.assembleAndDownloadFile(fileData);
+                            this.processReceivedFile(fileData);
                         }
                     }
                 }
             }
             
-            assembleAndDownloadFile(fileData) {
+            async processReceivedFile(fileData) {
                 const totalSize = fileData.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
                 const assembledFile = new Uint8Array(totalSize);
                 
@@ -732,15 +811,90 @@
                     offset += chunk.length;
                 });
                 
-                const blob = new Blob([assembledFile]);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileData.name;
-                a.click();
-                URL.revokeObjectURL(url);
+                const blob = new Blob([assembledFile], { type: fileData.type });
+                const file = new File([blob], fileData.name, { type: fileData.type });
                 
-                this.showMessage(`Downloaded: ${fileData.name}`, 'success');
+                // Try platform-specific download methods
+                if (await this.tryWebShareDownload(file)) {
+                    this.showMessage(`Shared via ${this.platform.name}: ${fileData.name}`, 'success');
+                } else if (this.tryDirectDownload(blob, fileData.name)) {
+                    this.showMessage(`Downloaded: ${fileData.name}`, 'success');
+                } else if (this.tryAlternativeDownload(blob, fileData.name, fileData.type)) {
+                    this.showMessage(`Opened for download: ${fileData.name}`, 'success');
+                } else {
+                    this.showMessage(`Unable to download: ${fileData.name}`, 'error');
+                }
+            }
+            
+            async tryWebShareDownload(file) {
+                if (!this.platform.supportsWebShareFiles) return false;
+                
+                try {
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Received File',
+                            text: 'File received via P2P transfer'
+                        });
+                        return true;
+                    }
+                } catch (error) {
+                    console.log('Web Share failed:', error);
+                }
+                return false;
+            }
+            
+            tryDirectDownload(blob, filename) {
+                if (this.platform.isIOS && this.platform.isSafari) {
+                    // iOS Safari has issues with direct downloads
+                    return false;
+                }
+                
+                try {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    return true;
+                } catch (error) {
+                    console.log('Direct download failed:', error);
+                    return false;
+                }
+            }
+            
+            tryAlternativeDownload(blob, filename, mimeType) {
+                try {
+                    if (this.platform.isIOS) {
+                        // For iOS, open in new window for user to save manually
+                        const url = URL.createObjectURL(blob);
+                        const newWindow = window.open(url, '_blank');
+                        if (newWindow) {
+                            // Set a timeout to clean up the URL
+                            setTimeout(() => URL.revokeObjectURL(url), 10000);
+                            return true;
+                        }
+                    }
+                    
+                    // Fallback: create data URL and open
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const dataUrl = e.target.result;
+                        const newWindow = window.open();
+                        if (newWindow) {
+                            newWindow.location = dataUrl;
+                        }
+                    };
+                    reader.readAsDataURL(blob);
+                    return true;
+                } catch (error) {
+                    console.log('Alternative download failed:', error);
+                    return false;
+                }
             }
             
             handleDragOver(e) {
@@ -815,7 +969,7 @@
         }
         
         // Initialize
-        const p2p = new SimpleP2PTransfer();
+        const p2p = new CrossPlatformFileTransfer();
         
         // Global functions
         function startConnection() {
