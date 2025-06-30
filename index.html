@@ -232,6 +232,16 @@
             border: 1px solid #bbdefb;
         }
         
+        .restore-indicator {
+            background: #fff3e0;
+            color: #ef6c00;
+            padding: 8px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 12px;
+            text-align: center;
+        }
+        
         .hidden {
             display: none;
         }
@@ -273,6 +283,11 @@
             
             <!-- Messages -->
             <div id="messages"></div>
+            
+            <!-- Restore Indicator -->
+            <div id="restore-indicator" class="restore-indicator hidden">
+                🔄 Restoring previous connection...
+            </div>
             
             <!-- File Selection -->
             <input type="file" id="file-input" multiple style="display: none;">
@@ -321,9 +336,19 @@
                 this.init();
             }
             
+            checkUrlCode() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('connect');
+                if (code && !localStorage.getItem('fileTransferConnection')) {
+                    document.getElementById('peer-code').value = code;
+                    setTimeout(() => this.connectToPeer(), 1000);
+                }
+            }
+            
             init() {
                 this.setupDragDrop();
                 this.setupFileInput();
+                this.restoreConnection();
                 this.checkUrlCode();
                 this.log('System initialized');
             }
@@ -359,12 +384,119 @@
                 });
             }
             
-            checkUrlCode() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const code = urlParams.get('connect');
-                if (code) {
-                    document.getElementById('peer-code').value = code;
-                    setTimeout(() => this.connectToPeer(), 1000);
+            restoreConnection() {
+                const savedConnection = localStorage.getItem('fileTransferConnection');
+                if (savedConnection) {
+                    try {
+                        const connectionData = JSON.parse(savedConnection);
+                        this.log(`Restoring connection: ${connectionData.code}`);
+                        
+                        // Show restore indicator
+                        document.getElementById('restore-indicator').classList.remove('hidden');
+                        
+                        // Restore UI state
+                        if (connectionData.isHost) {
+                            this.connectionCode = connectionData.code;
+                            this.reconnectAsHost();
+                        } else {
+                            document.getElementById('peer-code').value = connectionData.code;
+                            this.reconnectAsPeer(connectionData.code);
+                        }
+                        
+                        this.showMessage('Restoring connection...', 'info');
+                        
+                    } catch (error) {
+                        this.log(`Error restoring connection: ${error}`);
+                        localStorage.removeItem('fileTransferConnection');
+                        document.getElementById('restore-indicator').classList.add('hidden');
+                    }
+                }
+            }
+            
+            saveConnectionState(isHost, code) {
+                const connectionData = {
+                    isHost: isHost,
+                    code: code,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('fileTransferConnection', JSON.stringify(connectionData));
+                this.log(`Connection state saved: ${code}`);
+            }
+            
+            clearConnectionState() {
+                localStorage.removeItem('fileTransferConnection');
+                this.log('Connection state cleared');
+            }
+            
+            async reconnectAsHost() {
+                try {
+                    this.peer = new Peer(this.connectionCode, {
+                        debug: 0,
+                        config: {
+                            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                        }
+                    });
+                    
+                    this.peer.on('open', (id) => {
+                        this.log(`Host reconnected with ID: ${id}`);
+                        this.updateStatus('Waiting for connection...', 'waiting');
+                        this.showConnectionCode();
+                        this.showMessage('Host restored - waiting for connection', 'info');
+                        document.getElementById('restore-indicator').classList.add('hidden');
+                    });
+                    
+                    this.peer.on('connection', (conn) => {
+                        this.log('Someone reconnected');
+                        this.connection = conn;
+                        this.setupConnection();
+                    });
+                    
+                    this.peer.on('error', (err) => {
+                        this.log(`Host reconnect error: ${err}`);
+                        this.showMessage('Failed to restore host connection', 'error');
+                        this.clearConnectionState();
+                        this.resetConnection();
+                        document.getElementById('restore-indicator').classList.add('hidden');
+                    });
+                    
+                } catch (error) {
+                    this.log(`Host reconnect error: ${error}`);
+                    this.clearConnectionState();
+                    this.resetConnection();
+                    document.getElementById('restore-indicator').classList.add('hidden');
+                }
+            }
+            
+            async reconnectAsPeer(code) {
+                try {
+                    this.peer = new Peer({
+                        debug: 0,
+                        config: {
+                            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                        }
+                    });
+                    
+                    this.peer.on('open', () => {
+                        this.log('Reconnecting to peer');
+                        this.connection = this.peer.connect(code);
+                        this.setupConnection();
+                        this.updateStatus('Reconnecting...', 'waiting');
+                        document.getElementById('restore-indicator').classList.add('hidden');
+                    });
+                    
+                    this.peer.on('error', (err) => {
+                        this.log(`Peer reconnect error: ${err}`);
+                        this.showMessage('Failed to restore peer connection', 'error');
+                        this.clearConnectionState();
+                        this.resetConnection();
+                        document.getElementById('restore-indicator').classList.add('hidden');
+                    });
+                    
+                } catch (error) {
+                    this.log(`Peer reconnect error: ${error}`);
+                    this.clearConnectionState();
+                    this.resetConnection();
+                    document.getElementById('restore-indicator').classList.add('hidden');
                 }
             }
             
@@ -389,6 +521,7 @@
                         this.updateStatus('Waiting for connection...', 'waiting');
                         this.showConnectionCode();
                         this.showMessage('Share the code with other device', 'info');
+                        this.saveConnectionState(true, this.connectionCode);
                     });
                     
                     this.peer.on('connection', (conn) => {
@@ -431,6 +564,7 @@
                         this.connection = this.peer.connect(code);
                         this.setupConnection();
                         this.updateStatus('Connecting...', 'waiting');
+                        this.saveConnectionState(false, code);
                     });
                     
                     this.peer.on('error', (err) => {
@@ -452,7 +586,20 @@
                     this.log('Connection established');
                     this.isConnected = true;
                     this.updateStatus('Connected!', 'connected');
-                    this.showMessage('✅ Connected! Ready to share files.', 'success');
+                    
+                    // Hide restore indicator
+                    document.getElementById('restore-indicator').classList.add('hidden');
+                    
+                    // Check if this is a reconnection
+                    const savedConnection = localStorage.getItem('fileTransferConnection');
+                    const isReconnection = savedConnection !== null;
+                    
+                    if (isReconnection) {
+                        this.showMessage('🔄 Connection restored successfully!', 'success');
+                    } else {
+                        this.showMessage('✅ Connected! Ready to share files.', 'success');
+                    }
+                    
                     this.enableFileSharing();
                 });
                 
@@ -463,7 +610,17 @@
                 this.connection.on('close', () => {
                     this.log('Connection closed');
                     this.showMessage('Connection closed', 'error');
-                    this.resetConnection();
+                    
+                    // Check if we should attempt reconnection
+                    const savedConnection = localStorage.getItem('fileTransferConnection');
+                    if (savedConnection) {
+                        this.showMessage('Attempting to reconnect...', 'info');
+                        setTimeout(() => {
+                            this.restoreConnection();
+                        }, 2000);
+                    } else {
+                        this.resetConnection();
+                    }
                 });
                 
                 this.connection.on('error', (err) => {
@@ -844,6 +1001,7 @@
             disconnect() {
                 if (this.connection) this.connection.close();
                 if (this.peer) this.peer.destroy();
+                this.clearConnectionState(); // Clear saved connection on manual disconnect
                 this.resetConnection();
                 this.showMessage('Disconnected', 'info');
             }
@@ -862,6 +1020,10 @@
                 document.getElementById('disconnect-btn').classList.add('hidden');
                 document.getElementById('sending-files').innerHTML = '';
                 document.getElementById('received-files').innerHTML = '';
+                document.getElementById('restore-indicator').classList.add('hidden');
+                
+                // Don't clear localStorage here - only clear on manual disconnect
+                this.log('Connection reset (keeping saved state)');
             }
             
             formatFileSize(bytes) {
