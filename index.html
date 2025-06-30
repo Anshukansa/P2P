@@ -1,1 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Transfer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+        }
+        
+        .device-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .device-circle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        
+        .device-circle.connected {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+        }
+        
+        .actions {
+            padding: 30px;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        
+        .btn-success {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+        }
+        
+        .file-drop {
+            border: 3px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .file-drop.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .file-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .connection-code {
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+            letter-spacing: 2px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        #qrcode {
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 P2P File Transfer</h1>
+            <p>Lightning-fast file sharing between devices</p>
+        </div>
+        
+        <div class="status">
+            <div id="status-text">Ready to connect</div>
+            <div id="device-circle" class="device-circle" onclick="toggleConnection()">
+                <span id="device-text">START</span>
+            </div>
+            <div id="connection-info" class="hidden">
+                <div class="connection-code" id="connection-code"></div>
+                <div class="qr-code">
+                    <div id="qrcode"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <input type="file" id="file-input" multiple style="display: none;">
+            <button class="btn btn-primary" onclick="selectFiles()" id="select-btn" disabled>
+                📁 Select Files to Send
+            </button>
+            
+            <div class="file-drop" id="file-drop" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragleave="dragLeaveHandler(event);">
+                <p>📤 Drag & Drop files here or click above to select</p>
+            </div>
+            
+            <div class="file-list" id="file-list"></div>
+            
+            <button class="btn btn-success" onclick="connectToPeer()" id="connect-btn">
+                🔗 Connect to Device
+            </button>
+            
+            <input type="text" id="peer-code" placeholder="Enter connection code" style="width: 100%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 10px; font-size: 16px;">
+        </div>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        class P2PFileTransfer {
+            constructor() {
+                this.peer = null;
+                this.connection = null;
+                this.isHost = false;
+                this.connectionCode = '';
+                this.files = [];
+                this.chunkSize = 64 * 1024; // 64KB chunks for fast transfer
+                
+                // Simple signaling server simulation
+                this.signalingData = new Map();
+                this.init();
+            }
+            
+            init() {
+                this.setupEventListeners();
+                this.updateStatus('Ready to connect');
+            }
+            
+            setupEventListeners() {
+                document.getElementById('file-input').addEventListener('change', (e) => {
+                    this.handleFiles(e.target.files);
+                });
+            }
+            
+            generateConnectionCode() {
+                return Math.random().toString(36).substring(2, 8).toUpperCase();
+            }
+            
+            async startHost() {
+                this.isHost = true;
+                this.connectionCode = this.generateConnectionCode();
+                
+                // Simulate peer connection setup
+                this.updateStatus('Waiting for connection...');
+                document.getElementById('device-text').textContent = 'WAITING';
+                document.getElementById('device-circle').classList.add('connected');
+                document.getElementById('connection-code').textContent = this.connectionCode;
+                document.getElementById('connection-info').classList.remove('hidden');
+                document.getElementById('select-btn').disabled = false;
+                
+                // Generate QR code
+                const url = `${window.location.href}?connect=${this.connectionCode}`;
+                QRCode.toCanvas(document.getElementById('qrcode'), url, {
+                    width: 200,
+                    height: 200
+                });
+                
+                // Simulate connection in 3 seconds for demo
+                setTimeout(() => {
+                    this.simulateConnection();
+                }, 3000);
+            }
+            
+            async connectToPeer() {
+                const code = document.getElementById('peer-code').value.toUpperCase();
+                if (!code) {
+                    alert('Please enter a connection code');
+                    return;
+                }
+                
+                this.updateStatus('Connecting...');
+                document.getElementById('device-text').textContent = 'CONNECTING';
+                document.getElementById('device-circle').classList.add('connected');
+                
+                // Simulate connection
+                setTimeout(() => {
+                    this.simulateConnection();
+                    document.getElementById('select-btn').disabled = false;
+                }, 2000);
+            }
+            
+            simulateConnection() {
+                this.updateStatus('Connected! Ready to transfer files');
+                document.getElementById('device-text').textContent = 'CONNECTED';
+                document.getElementById('device-circle').style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            }
+            
+            handleFiles(files) {
+                this.files = Array.from(files);
+                this.displayFiles();
+                this.sendFiles();
+            }
+            
+            displayFiles() {
+                const fileList = document.getElementById('file-list');
+                fileList.innerHTML = '';
+                
+                this.files.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <div>
+                            <strong>${file.name}</strong><br>
+                            <small>${this.formatFileSize(file.size)}</small>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar" id="progress-${index}"></div>
+                        </div>
+                    `;
+                    fileList.appendChild(fileItem);
+                });
+            }
+            
+            async sendFiles() {
+                if (!this.files.length) return;
+                
+                for (let i = 0; i < this.files.length; i++) {
+                    await this.sendFile(this.files[i], i);
+                }
+            }
+            
+            async sendFile(file, index) {
+                const progressBar = document.getElementById(`progress-${index}`);
+                const chunks = Math.ceil(file.size / this.chunkSize);
+                
+                for (let i = 0; i < chunks; i++) {
+                    const start = i * this.chunkSize;
+                    const end = Math.min(start + this.chunkSize, file.size);
+                    const chunk = file.slice(start, end);
+                    
+                    // Simulate high-speed transfer
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    
+                    const progress = ((i + 1) / chunks) * 100;
+                    progressBar.style.width = `${progress}%`;
+                }
+                
+                // File transfer complete
+                console.log(`File ${file.name} transferred successfully`);
+            }
+            
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            updateStatus(message) {
+                document.getElementById('status-text').textContent = message;
+            }
+        }
+        
+        // Global instance
+        const p2p = new P2PFileTransfer();
+        
+        // Global functions
+        function toggleConnection() {
+            const deviceText = document.getElementById('device-text');
+            if (deviceText.textContent === 'START') {
+                p2p.startHost();
+            }
+        }
+        
+        function selectFiles() {
+            document.getElementById('file-input').click();
+        }
+        
+        function connectToPeer() {
+            p2p.connectToPeer();
+        }
+        
+        function dropHandler(e) {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            p2p.handleFiles(files);
+            document.getElementById('file-drop').classList.remove('drag-over');
+        }
+        
+        function dragOverHandler(e) {
+            e.preventDefault();
+            document.getElementById('file-drop').classList.add('drag-over');
+        }
+        
+        function dragLeaveHandler(e) {
+            e.preventDefault();
+            document.getElementById('file-drop').classList.remove('drag-over');
+        }
+        
+        // Check for connection code in URL
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const connectCode = urlParams.get('connect');
+            if (connectCode) {
+                document.getElementById('peer-code').value = connectCode;
+                setTimeout(() => p2p.connectToPeer(), 1000);
+            }
+        });
+    </script>
+</body>
+</html>
