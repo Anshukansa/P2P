@@ -180,9 +180,13 @@
             padding: 15px;
             border-radius: 8px;
             margin: 10px 0;
+        }
+        
+        .file-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 10px;
         }
         
         .progress {
@@ -199,6 +203,13 @@
             background: linear-gradient(45deg, #4CAF50, #45a049);
             width: 0%;
             transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 5px;
         }
         
         .status-message {
@@ -239,6 +250,33 @@
             cursor: pointer;
             font-size: 12px;
             margin-left: 10px;
+        }
+
+        .download-item {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #c8e6c9;
+        }
+
+        .download-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .debug-info {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            margin: 10px 0;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -284,6 +322,9 @@
             <!-- File List -->
             <div id="file-list" class="file-list"></div>
             
+            <!-- Downloads -->
+            <div id="download-list" class="file-list"></div>
+            
             <!-- Connection Input -->
             <input type="text" id="peer-code" placeholder="Enter connection code from other device" class="input-field">
             <button class="btn btn-success" onclick="connectToPeer()" id="connect-btn">
@@ -294,12 +335,15 @@
             <button class="btn btn-danger hidden" onclick="disconnect()" id="disconnect-btn">
                 ❌ Disconnect
             </button>
+
+            <!-- Debug Info -->
+            <div id="debug-info" class="debug-info hidden"></div>
         </div>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
-        class SimpleP2PTransfer {
+        class FixedP2PTransfer {
             constructor() {
                 this.peer = null;
                 this.connection = null;
@@ -307,7 +351,8 @@
                 this.connectionCode = '';
                 this.files = [];
                 this.receivedFiles = new Map();
-                this.chunkSize = 16384; // 16KB chunks
+                this.chunkSize = 32768; // 32KB chunks for better reliability
+                this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
                 
                 this.init();
             }
@@ -315,6 +360,16 @@
             init() {
                 this.setupEventListeners();
                 this.checkForConnectionCode();
+                this.log('System initialized');
+            }
+            
+            log(message) {
+                console.log('[P2P]', message);
+                const debugInfo = document.getElementById('debug-info');
+                if (debugInfo) {
+                    debugInfo.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                    debugInfo.classList.remove('hidden');
+                }
             }
             
             setupEventListeners() {
@@ -338,13 +393,15 @@
                 try {
                     this.connectionCode = this.generateCode();
                     this.showMessage('Starting connection...', 'info');
+                    this.log('Starting peer connection');
                     
-                    // Create peer with simple configuration
+                    // Create peer with reliable configuration
                     this.peer = new Peer(this.connectionCode, {
-                        debug: 0,
+                        debug: 1,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
                             ]
                         }
                     });
@@ -354,22 +411,24 @@
                         this.showConnectionCode();
                         this.updateStatus('Waiting for connection...', 'waiting');
                         this.showMessage('Waiting for other device to connect', 'info');
+                        this.log(`Peer opened with ID: ${id}`);
                     });
                     
                     this.peer.on('connection', (conn) => {
+                        this.log('Incoming connection received');
                         this.connection = conn;
                         this.setupConnection();
                     });
                     
                     this.peer.on('error', (err) => {
-                        console.error('Peer error:', err);
+                        this.log(`Peer error: ${err.type} - ${err.message}`);
                         this.showMessage(`Error: ${err.type}`, 'error');
                         this.resetConnection();
                     });
                     
                 } catch (error) {
+                    this.log(`Start error: ${error.message}`);
                     this.showMessage('Failed to start. Please try again.', 'error');
-                    console.error('Start error:', error);
                 }
             }
             
@@ -382,54 +441,67 @@
                 
                 try {
                     this.showMessage('Connecting...', 'info');
+                    this.log(`Attempting to connect to: ${code}`);
                     
                     this.peer = new Peer({
-                        debug: 0,
+                        debug: 1,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
                             ]
                         }
                     });
                     
                     this.peer.on('open', () => {
-                        this.connection = this.peer.connect(code);
+                        this.log('Peer opened, creating connection');
+                        this.connection = this.peer.connect(code, {
+                            reliable: true
+                        });
                         this.setupConnection();
                         this.updateStatus('Connecting...', 'waiting');
                     });
                     
                     this.peer.on('error', (err) => {
-                        console.error('Connection error:', err);
+                        this.log(`Connection error: ${err.type} - ${err.message}`);
                         this.showMessage('Failed to connect. Check the code and try again.', 'error');
                         this.resetConnection();
                     });
                     
                 } catch (error) {
+                    this.log(`Connect error: ${error.message}`);
                     this.showMessage('Connection failed. Please try again.', 'error');
-                    console.error('Connect error:', error);
                 }
             }
             
             setupConnection() {
-                if (!this.connection) return;
+                if (!this.connection) {
+                    this.log('No connection to setup');
+                    return;
+                }
+                
+                this.log('Setting up connection handlers');
                 
                 this.connection.on('open', () => {
+                    this.log('Connection opened successfully');
                     this.updateStatus('Connected!', 'connected');
                     this.showMessage('Successfully connected! You can now share files.', 'success');
                     this.enableFileSharing();
                 });
                 
                 this.connection.on('data', (data) => {
+                    this.log(`Received data: ${data.type}`);
                     this.handleReceivedData(data);
                 });
                 
                 this.connection.on('close', () => {
+                    this.log('Connection closed');
                     this.showMessage('Connection closed', 'error');
                     this.resetConnection();
                 });
                 
                 this.connection.on('error', (err) => {
-                    console.error('Connection error:', err);
+                    this.log(`Connection error: ${err}`);
                     this.showMessage('Connection error occurred', 'error');
                     this.resetConnection();
                 });
@@ -478,6 +550,7 @@
                 }
                 
                 this.files = Array.from(files);
+                this.log(`Selected ${this.files.length} files`);
                 this.displayFiles();
                 this.sendFiles();
             }
@@ -490,19 +563,23 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
                     fileItem.innerHTML = `
-                        <div>
-                            <strong>${file.name}</strong><br>
-                            <small>${this.formatFileSize(file.size)}</small>
-                            <div class="progress">
-                                <div class="progress-bar" id="progress-${index}"></div>
+                        <div class="file-info">
+                            <div>
+                                <strong>${file.name}</strong><br>
+                                <small>${this.formatFileSize(file.size)}</small>
                             </div>
                         </div>
+                        <div class="progress">
+                            <div class="progress-bar" id="progress-${index}"></div>
+                        </div>
+                        <div class="progress-text" id="progress-text-${index}">Preparing...</div>
                     `;
                     fileList.appendChild(fileItem);
                 });
             }
             
             async sendFiles() {
+                this.log('Starting file send process');
                 for (let i = 0; i < this.files.length; i++) {
                     await this.sendFile(this.files[i], i);
                 }
@@ -511,79 +588,233 @@
             
             async sendFile(file, index) {
                 const progressBar = document.getElementById(`progress-${index}`);
+                const progressText = document.getElementById(`progress-text-${index}`);
                 
-                // Send file metadata
-                this.connection.send({
+                this.log(`Sending file: ${file.name} (${file.size} bytes)`);
+                
+                // Send file metadata with checksum
+                const fileData = {
                     type: 'file-start',
                     name: file.name,
                     size: file.size,
-                    index: index
-                });
+                    lastModified: file.lastModified,
+                    index: index,
+                    totalChunks: Math.ceil(file.size / this.chunkSize)
+                };
+                
+                this.connection.send(fileData);
+                progressText.textContent = 'Sending...';
                 
                 const chunks = Math.ceil(file.size / this.chunkSize);
+                this.log(`File will be sent in ${chunks} chunks`);
                 
                 for (let i = 0; i < chunks; i++) {
                     const start = i * this.chunkSize;
                     const end = Math.min(start + this.chunkSize, file.size);
                     const chunk = file.slice(start, end);
                     
+                    // Convert to ArrayBuffer properly
                     const arrayBuffer = await chunk.arrayBuffer();
                     
-                    this.connection.send({
+                    const chunkData = {
                         type: 'file-chunk',
                         index: index,
                         chunkIndex: i,
+                        totalChunks: chunks,
                         data: arrayBuffer,
+                        size: arrayBuffer.byteLength,
                         isLast: i === chunks - 1
-                    });
+                    };
+                    
+                    this.connection.send(chunkData);
                     
                     const progress = ((i + 1) / chunks) * 100;
                     progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${Math.round(progress)}% (${i + 1}/${chunks} chunks)`;
                     
-                    // Small delay to prevent overwhelming
-                    await new Promise(resolve => setTimeout(resolve, 1));
+                    // Small delay for reliability
+                    await new Promise(resolve => setTimeout(resolve, 5));
                 }
+                
+                this.log(`File ${file.name} sent successfully`);
+                progressText.textContent = 'Complete!';
             }
             
             handleReceivedData(data) {
                 if (data.type === 'file-start') {
+                    this.log(`Starting to receive file: ${data.name}`);
                     this.receivedFiles.set(data.index, {
                         name: data.name,
                         size: data.size,
-                        chunks: []
+                        lastModified: data.lastModified,
+                        totalChunks: data.totalChunks,
+                        chunks: new Array(data.totalChunks),
+                        receivedChunks: 0
                     });
                     this.showMessage(`Receiving: ${data.name}`, 'info');
+                    this.showReceivingFile(data);
+                    
                 } else if (data.type === 'file-chunk') {
-                    const fileData = this.receivedFiles.get(data.index);
-                    if (fileData) {
-                        fileData.chunks[data.chunkIndex] = new Uint8Array(data.data);
-                        
-                        if (data.isLast) {
-                            this.assembleAndDownloadFile(fileData);
-                        }
-                    }
+                    this.handleFileChunk(data);
                 }
             }
             
-            assembleAndDownloadFile(fileData) {
-                const totalSize = fileData.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                const assembledFile = new Uint8Array(totalSize);
+            showReceivingFile(fileInfo) {
+                const downloadList = document.getElementById('download-list');
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.id = `receiving-${fileInfo.index}`;
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div>
+                            <strong>📥 ${fileInfo.name}</strong><br>
+                            <small>${this.formatFileSize(fileInfo.size)}</small>
+                        </div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" id="receive-progress-${fileInfo.index}"></div>
+                    </div>
+                    <div class="progress-text" id="receive-progress-text-${fileInfo.index}">Receiving...</div>
+                `;
+                downloadList.appendChild(fileItem);
+            }
+            
+            handleFileChunk(chunkData) {
+                const fileInfo = this.receivedFiles.get(chunkData.index);
+                if (!fileInfo) {
+                    this.log(`No file info for chunk ${chunkData.index}`);
+                    return;
+                }
                 
-                let offset = 0;
-                fileData.chunks.forEach(chunk => {
-                    assembledFile.set(chunk, offset);
-                    offset += chunk.length;
-                });
+                // Store chunk at correct position
+                fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
+                fileInfo.receivedChunks++;
                 
-                const blob = new Blob([assembledFile]);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileData.name;
-                a.click();
-                URL.revokeObjectURL(url);
+                const progress = (fileInfo.receivedChunks / fileInfo.totalChunks) * 100;
+                const progressBar = document.getElementById(`receive-progress-${chunkData.index}`);
+                const progressText = document.getElementById(`receive-progress-text-${chunkData.index}`);
                 
-                this.showMessage(`Downloaded: ${fileData.name}`, 'success');
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (progressText) progressText.textContent = `${Math.round(progress)}% (${fileInfo.receivedChunks}/${fileInfo.totalChunks})`;
+                
+                this.log(`Received chunk ${chunkData.chunkIndex + 1}/${fileInfo.totalChunks} for ${fileInfo.name}`);
+                
+                if (chunkData.isLast || fileInfo.receivedChunks === fileInfo.totalChunks) {
+                    this.log(`All chunks received for ${fileInfo.name}, assembling file`);
+                    this.assembleAndDownloadFile(fileInfo, chunkData.index);
+                }
+            }
+            
+            assembleAndDownloadFile(fileInfo, index) {
+                try {
+                    this.log(`Assembling file: ${fileInfo.name}`);
+                    
+                    // Calculate total size from chunks
+                    let totalSize = 0;
+                    for (let chunk of fileInfo.chunks) {
+                        if (chunk) totalSize += chunk.length;
+                    }
+                    
+                    this.log(`Expected size: ${fileInfo.size}, Actual size: ${totalSize}`);
+                    
+                    // Assemble file
+                    const assembledFile = new Uint8Array(totalSize);
+                    let offset = 0;
+                    
+                    for (let i = 0; i < fileInfo.chunks.length; i++) {
+                        const chunk = fileInfo.chunks[i];
+                        if (chunk) {
+                            assembledFile.set(chunk, offset);
+                            offset += chunk.length;
+                        } else {
+                            this.log(`Missing chunk ${i} for ${fileInfo.name}`);
+                        }
+                    }
+                    
+                    // Create blob and download
+                    const blob = new Blob([assembledFile]);
+                    this.log(`Created blob of size: ${blob.size}`);
+                    
+                    // Update UI
+                    const receivingItem = document.getElementById(`receiving-${index}`);
+                    if (receivingItem) {
+                        receivingItem.className = 'download-item';
+                        receivingItem.innerHTML = `
+                            <div class="file-info">
+                                <div>
+                                    <strong>✅ ${fileInfo.name}</strong><br>
+                                    <small>${this.formatFileSize(blob.size)} - Ready to download</small>
+                                </div>
+                            </div>
+                            <button class="download-btn" onclick="p2p.downloadFile('${fileInfo.name}', ${index})">
+                                📥 Download File
+                            </button>
+                        `;
+                    }
+                    
+                    // Store blob for download
+                    this.receivedFiles.get(index).blob = blob;
+                    
+                    this.showMessage(`✅ ${fileInfo.name} received successfully!`, 'success');
+                    this.log(`File ${fileInfo.name} ready for download`);
+                    
+                } catch (error) {
+                    this.log(`Error assembling file: ${error.message}`);
+                    this.showMessage(`Error receiving ${fileInfo.name}`, 'error');
+                }
+            }
+            
+            downloadFile(filename, index) {
+                const fileData = this.receivedFiles.get(index);
+                if (!fileData || !fileData.blob) {
+                    this.showMessage('File not available for download', 'error');
+                    return;
+                }
+                
+                try {
+                    if (this.isIOS && navigator.share) {
+                        // Use Web Share API on iOS
+                        const file = new File([fileData.blob], filename);
+                        navigator.share({
+                            files: [file],
+                            title: `Downloaded: ${filename}`
+                        }).then(() => {
+                            this.showMessage(`Shared: ${filename}`, 'success');
+                        }).catch(err => {
+                            this.log(`iOS share failed: ${err.message}`);
+                            this.fallbackDownload(fileData.blob, filename);
+                        });
+                    } else {
+                        this.fallbackDownload(fileData.blob, filename);
+                    }
+                } catch (error) {
+                    this.log(`Download error: ${error.message}`);
+                    this.showMessage('Download failed', 'error');
+                }
+            }
+            
+            fallbackDownload(blob, filename) {
+                try {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.style.display = 'none';
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // Clean up
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    
+                    this.showMessage(`Downloaded: ${filename}`, 'success');
+                    this.log(`Download completed: ${filename}`);
+                    
+                } catch (error) {
+                    this.log(`Fallback download error: ${error.message}`);
+                    this.showMessage('Download failed', 'error');
+                }
             }
             
             handleDragOver(e) {
@@ -623,6 +854,7 @@
                 document.getElementById('connect-btn').classList.remove('hidden');
                 document.getElementById('disconnect-btn').classList.add('hidden');
                 document.getElementById('file-list').innerHTML = '';
+                document.getElementById('download-list').innerHTML = '';
             }
             
             checkForConnectionCode() {
@@ -652,13 +884,15 @@
                 container.appendChild(messageDiv);
                 
                 setTimeout(() => {
-                    container.innerHTML = '';
+                    if (container.contains(messageDiv)) {
+                        container.removeChild(messageDiv);
+                    }
                 }, 5000);
             }
         }
         
         // Initialize
-        const p2p = new SimpleP2PTransfer();
+        const p2p = new FixedP2PTransfer();
         
         // Global functions
         function startConnection() {
