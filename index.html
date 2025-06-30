@@ -231,14 +231,7 @@
         </div>
     </div>
 
-    <script>
-        class P2PMessaging {
-            constructor() {
-                this.peer = null;
-                this.connection = null;
-                this.isHost = false;
-                this.messages = [];
-                this.init();
+
             }
             
             async init() {
@@ -258,24 +251,32 @@
             startHost() {
                 const hostId = this.generateId();
                 
-                // Initialize peer with custom ID
+                // Initialize peer with custom ID using official PeerJS cloud server
                 this.peer = new Peer(hostId, {
-                    host: 'peerjs-server.herokuapp.com',
-                    port: 443,
-                    path: '/',
-                    secure: true
+                    debug: 2,
+                    config: {
+                        'iceServers': [
+                            { 'urls': 'stun:stun.l.google.com:19302' },
+                            { 'urls': 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    }
                 });
                 
                 this.peer.on('open', (id) => {
                     document.getElementById('host-id').textContent = id;
                     document.getElementById('host-status').textContent = 'Server running - waiting for connections...';
                     document.getElementById('host-status').className = 'status connected';
+                    document.getElementById('send-btn').disabled = false;
                 });
                 
                 this.peer.on('connection', (conn) => {
                     this.connection = conn;
                     document.getElementById('host-status').textContent = 'Client connected!';
                     document.getElementById('chat-section').classList.remove('hidden');
+                    
+                    conn.on('open', () => {
+                        this.addMessage('Client connected successfully!', 'system');
+                    });
                     
                     conn.on('data', (data) => {
                         this.receiveMessage(data);
@@ -284,25 +285,35 @@
                     conn.on('close', () => {
                         document.getElementById('host-status').textContent = 'Client disconnected';
                         document.getElementById('host-status').className = 'status disconnected';
+                        this.addMessage('Client disconnected', 'system');
                     });
                 });
                 
                 this.peer.on('error', (err) => {
                     console.error('Peer error:', err);
-                    document.getElementById('host-status').textContent = 'Error: ' + err.message;
+                    document.getElementById('host-status').textContent = 'Connection error - try refreshing';
                     document.getElementById('host-status').className = 'status disconnected';
+                });
+                
+                this.peer.on('disconnected', () => {
+                    document.getElementById('host-status').textContent = 'Reconnecting...';
+                    this.peer.reconnect();
                 });
             }
             
             connectToHost(hostId) {
                 this.peer = new Peer({
-                    host: 'peerjs-server.herokuapp.com',
-                    port: 443,
-                    path: '/',
-                    secure: true
+                    debug: 2,
+                    config: {
+                        'iceServers': [
+                            { 'urls': 'stun:stun.l.google.com:19302' },
+                            { 'urls': 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    }
                 });
                 
                 this.peer.on('open', () => {
+                    document.getElementById('client-status').textContent = 'Connecting to server...';
                     this.connection = this.peer.connect(hostId);
                     
                     this.connection.on('open', () => {
@@ -310,12 +321,26 @@
                         document.getElementById('client-status').className = 'status connected';
                         document.getElementById('chat-section').classList.remove('hidden');
                         document.getElementById('send-btn').disabled = false;
+                        this.addMessage('Connected to server successfully!', 'system');
                     });
                     
                     this.connection.on('error', (err) => {
-                        document.getElementById('client-status').textContent = 'Connection failed: ' + err.message;
+                        document.getElementById('client-status').textContent = 'Connection failed: Invalid ID or server offline';
                         document.getElementById('client-status').className = 'status disconnected';
                     });
+                    
+                    this.connection.on('close', () => {
+                        document.getElementById('client-status').textContent = 'Disconnected from server';
+                        document.getElementById('client-status').className = 'status disconnected';
+                        document.getElementById('send-btn').disabled = true;
+                        this.addMessage('Disconnected from server', 'system');
+                    });
+                });
+                
+                this.peer.on('error', (err) => {
+                    console.error('Client peer error:', err);
+                    document.getElementById('client-status').textContent = 'Connection error - check ID and try again';
+                    document.getElementById('client-status').className = 'status disconnected';
                 });
             }
             
@@ -342,11 +367,21 @@
             addMessage(text, type) {
                 const messagesContainer = document.getElementById('messages');
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${type}`;
-                messageDiv.innerHTML = `
-                    <div>${text}</div>
-                    <small>${new Date().toLocaleTimeString()}</small>
-                `;
+                
+                if (type === 'system') {
+                    messageDiv.className = 'message system';
+                    messageDiv.style.background = 'rgba(255, 193, 7, 0.3)';
+                    messageDiv.style.textAlign = 'center';
+                    messageDiv.style.fontStyle = 'italic';
+                    messageDiv.innerHTML = `<div>🔗 ${text}</div>`;
+                } else {
+                    messageDiv.className = `message ${type}`;
+                    messageDiv.innerHTML = `
+                        <div>${text}</div>
+                        <small>${new Date().toLocaleTimeString()}</small>
+                    `;
+                }
+                
                 messagesContainer.appendChild(messageDiv);
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
