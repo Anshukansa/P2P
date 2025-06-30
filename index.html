@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P File Transfer</title>
+    <title>File Transfer</title>
     <style>
         * {
             margin: 0;
@@ -12,288 +12,447 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+            background: #000;
+            color: #fff;
             min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        
-        .status-section {
-            padding: 30px 20px;
-            text-align: center;
-            background: #f8f9fa;
-        }
-        
-        .device-circle {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            margin: 20px auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
+            padding: 20px;
+        }
+        
+        .app {
+            width: 100%;
+            max-width: 440px;
+            background: #111;
+            border-radius: 24px;
+            border: 1px solid #333;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        
+        .header {
+            padding: 32px 24px 24px;
+            text-align: center;
+            border-bottom: 1px solid #222;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .main {
+            padding: 32px 24px;
+        }
+        
+        .status-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .status-text {
+            color: #ccc;
+            font-size: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .device-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: #fff;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: 600;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 16px;
+            position: relative;
         }
         
         .device-circle:hover {
             transform: scale(1.05);
+            box-shadow: 0 0 0 8px rgba(255,255,255,0.1);
         }
         
         .device-circle.waiting {
-            background: linear-gradient(45deg, #2196F3, #1976D2);
+            background: #333;
+            color: #fff;
             animation: pulse 2s infinite;
         }
         
         .device-circle.connected {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: #fff;
+            color: #000;
         }
         
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.4); }
+            70% { box-shadow: 0 0 0 20px rgba(255,255,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
         }
         
         .connection-code {
-            background: #e3f2fd;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
             padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-            text-align: center;
+            margin: 24px 0;
+        }
+        
+        .code-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
         }
         
         .code-display {
-            font-family: 'Courier New', monospace;
-            font-size: 28px;
-            font-weight: bold;
-            color: #1976d2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
             letter-spacing: 4px;
-            margin: 10px 0;
+            text-align: center;
+            margin-bottom: 16px;
         }
         
         .share-url {
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 12px;
+            background: #222;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 11px;
+            color: #888;
             word-break: break-all;
-            margin: 10px 0;
             cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
         }
         
-        .actions {
-            padding: 30px 20px;
+        .share-url:hover {
+            background: #2a2a2a;
+            border-color: #444;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .copy-btn:hover {
+            background: #f0f0f0;
+        }
+        
+        .section {
+            margin: 32px 0;
+        }
+        
+        .section-title {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
         }
         
         .btn {
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
+            padding: 16px;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
         }
         
         .btn:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
+            background: #fff;
+            color: #000;
         }
         
-        .btn-success {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            color: white;
+        .btn-primary:hover:not(:disabled) {
+            background: #f0f0f0;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+            border: 1px solid #444;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #404040;
+            border-color: #555;
         }
         
         .btn-danger {
-            background: linear-gradient(45deg, #f44336, #d32f2f);
-            color: white;
+            background: #222;
+            color: #ff4444;
+            border: 1px solid #444;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #2a1a1a;
+            border-color: #ff4444;
         }
         
         .input-field {
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            border: 2px solid #ddd;
-            border-radius: 10px;
+            padding: 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            color: #fff;
             font-size: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
         }
         
         .input-field:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #666;
+            background: #222;
+        }
+        
+        .input-field::placeholder {
+            color: #666;
         }
         
         .file-drop {
-            border: 3px dashed #ddd;
-            border-radius: 10px;
+            border: 2px dashed #333;
+            border-radius: 12px;
             padding: 40px 20px;
             text-align: center;
-            margin: 20px 0;
             transition: all 0.3s ease;
+            cursor: pointer;
+            margin: 16px 0;
         }
         
         .file-drop.drag-over {
-            border-color: #667eea;
-            background: rgba(102, 126, 234, 0.1);
+            border-color: #666;
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .file-drop-text {
+            color: #888;
+            font-size: 14px;
         }
         
         .file-list {
-            margin: 20px 0;
+            margin: 16px 0;
         }
         
         .file-item {
-            background: #f8f9fa;
-            padding: 15px;
+            background: #1a1a1a;
+            border: 1px solid #333;
             border-radius: 8px;
-            margin: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 16px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .file-item:hover {
+            background: #222;
+        }
+        
+        .file-name {
+            color: #fff;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .file-size {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 8px;
         }
         
         .progress {
             width: 100%;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
             overflow: hidden;
-            margin: 5px 0;
         }
         
         .progress-bar {
             height: 100%;
-            background: linear-gradient(45deg, #4CAF50, #45a049);
+            background: #fff;
             width: 0%;
             transition: width 0.3s ease;
         }
         
-        .status-message {
-            padding: 15px;
+        .message {
+            padding: 12px 16px;
             border-radius: 8px;
-            margin: 15px 0;
+            margin: 16px 0;
+            font-size: 14px;
             text-align: center;
         }
         
-        .status-success {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 1px solid #c8e6c9;
+        .message-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.2);
         }
         
-        .status-error {
-            background: #ffebee;
-            color: #c62828;
-            border: 1px solid #ffcdd2;
+        .message-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
         
-        .status-info {
-            background: #e3f2fd;
-            color: #1976d2;
-            border: 1px solid #bbdefb;
+        .message-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.2);
         }
         
         .hidden {
             display: none;
         }
         
-        .copy-btn {
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-left: 10px;
+        .divider {
+            height: 1px;
+            background: #333;
+            margin: 24px 0;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+            
+            .app {
+                max-width: 100%;
+                border-radius: 16px;
+            }
+            
+            .header {
+                padding: 24px 20px 20px;
+            }
+            
+            .main {
+                padding: 24px 20px;
+            }
+            
+            .code-display {
+                font-size: 28px;
+                letter-spacing: 3px;
+            }
+            
+            .device-circle {
+                width: 80px;
+                height: 80px;
+                font-size: 12px;
+            }
+        }
+        
+        /* Smooth animations */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .btn, .input-field, .file-item, .device-circle {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="app">
         <div class="header">
-            <h1>🚀 P2P File Transfer</h1>
-            <p>Lightning-fast file sharing between devices</p>
+            <h1>File Transfer</h1>
+            <p>Share files instantly between devices</p>
         </div>
         
-        <div class="status-section">
-            <div id="status-text">Click START to begin</div>
-            
-            <div id="device-circle" class="device-circle" onclick="startConnection()">
-                <span id="device-text">START</span>
-            </div>
-            
-            <div id="connection-info" class="connection-code hidden">
-                <h3>Connection Code:</h3>
-                <div class="code-display" id="connection-code">----</div>
-                <p>Share this code with the other device</p>
-                <div class="share-url" id="share-url" onclick="copyShareUrl()">
-                    <span id="share-url-text">Generating link...</span>
-                    <button class="copy-btn" onclick="copyShareUrl()">Copy</button>
+        <div class="main">
+            <!-- Status Section -->
+            <div class="status-section">
+                <div class="status-text" id="status-text">Tap the circle to start</div>
+                
+                <div id="device-circle" class="device-circle" onclick="startConnection()">
+                    <span id="device-text">START</span>
+                </div>
+                
+                <div id="connection-info" class="connection-code hidden">
+                    <div class="code-label">Share this code</div>
+                    <div class="code-display" id="connection-code">------</div>
+                    <div class="share-url" onclick="copyShareUrl()">
+                        <span id="share-url-text">Generating link...</span>
+                        <button class="copy-btn">Copy</button>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="actions">
+            
+            <!-- Messages -->
             <div id="messages"></div>
             
-            <!-- File Selection -->
-            <input type="file" id="file-input" multiple style="display: none;">
-            <button class="btn btn-primary" onclick="selectFiles()" id="select-btn" disabled>
-                📁 Select Files to Send
-            </button>
-            
-            <!-- Drag & Drop Area -->
-            <div class="file-drop" id="file-drop">
-                <p>📤 Drop files here or click above to select</p>
+            <!-- File Sharing Section -->
+            <div class="section">
+                <input type="file" id="file-input" multiple style="display: none;">
+                
+                <button class="btn btn-primary" onclick="selectFiles()" id="select-btn" disabled>
+                    Select Files
+                </button>
+                
+                <div class="file-drop" id="file-drop" onclick="selectFiles()">
+                    <div class="file-drop-text">Drop files here or tap to select</div>
+                </div>
+                
+                <div id="file-list" class="file-list"></div>
             </div>
             
-            <!-- File List -->
-            <div id="file-list" class="file-list"></div>
+            <div class="divider"></div>
             
-            <!-- Connection Input -->
-            <input type="text" id="peer-code" placeholder="Enter connection code from other device" class="input-field">
-            <button class="btn btn-success" onclick="connectToPeer()" id="connect-btn">
-                🔗 Connect to Device
-            </button>
-            
-            <!-- Disconnect Button -->
-            <button class="btn btn-danger hidden" onclick="disconnect()" id="disconnect-btn">
-                ❌ Disconnect
-            </button>
+            <!-- Connection Section -->
+            <div class="section">
+                <input type="text" id="peer-code" placeholder="Enter code from other device" class="input-field">
+                
+                <button class="btn btn-secondary" onclick="connectToPeer()" id="connect-btn">
+                    Connect
+                </button>
+                
+                <button class="btn btn-danger hidden" onclick="disconnect()" id="disconnect-btn">
+                    Disconnect
+                </button>
+            </div>
         </div>
     </div>
 
@@ -353,7 +512,7 @@
                         this.isHost = true;
                         this.showConnectionCode();
                         this.updateStatus('Waiting for connection...', 'waiting');
-                        this.showMessage('Waiting for other device to connect', 'info');
+                        this.showMessage('Share the code with other device', 'info');
                     });
                     
                     this.peer.on('connection', (conn) => {
@@ -414,8 +573,8 @@
                 if (!this.connection) return;
                 
                 this.connection.on('open', () => {
-                    this.updateStatus('Connected!', 'connected');
-                    this.showMessage('Successfully connected! You can now share files.', 'success');
+                    this.updateStatus('Connected', 'connected');
+                    this.showMessage('Connected! You can now share files.', 'success');
                     this.enableFileSharing();
                 });
                 
@@ -490,12 +649,10 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
                     fileItem.innerHTML = `
-                        <div>
-                            <strong>${file.name}</strong><br>
-                            <small>${this.formatFileSize(file.size)}</small>
-                            <div class="progress">
-                                <div class="progress-bar" id="progress-${index}"></div>
-                            </div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${this.formatFileSize(file.size)}</div>
+                        <div class="progress">
+                            <div class="progress-bar" id="progress-${index}"></div>
                         </div>
                     `;
                     fileList.appendChild(fileItem);
@@ -617,7 +774,7 @@
                 this.files = [];
                 this.receivedFiles.clear();
                 
-                this.updateStatus('Click START to begin', '');
+                this.updateStatus('Tap the circle to start', '');
                 document.getElementById('connection-info').classList.add('hidden');
                 document.getElementById('select-btn').disabled = true;
                 document.getElementById('connect-btn').classList.remove('hidden');
@@ -645,7 +802,7 @@
             showMessage(message, type) {
                 const container = document.getElementById('messages');
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `status-message status-${type}`;
+                messageDiv.className = `message message-${type}`;
                 messageDiv.textContent = message;
                 
                 container.innerHTML = '';
