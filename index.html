@@ -3,1058 +3,399 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Network Transfer</title>
+    <title>P2P Messaging System</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 15px;
+            color: white;
         }
         
         .container {
-            max-width: 500px;
+            max-width: 800px;
             margin: 0 auto;
-            background: white;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            overflow: hidden;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
         
         .header {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            padding: 25px;
             text-align: center;
+            margin-bottom: 30px;
         }
         
         .header h1 {
-            font-size: 1.8em;
-            margin-bottom: 5px;
+            margin: 0;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
-        .main {
-            padding: 25px;
-        }
-        
-        .device-section {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        
-        .device-circle {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: #4CAF50;
-            margin: 15px auto;
+        .role-selection {
             display: flex;
-            align-items: center;
+            gap: 20px;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            margin-bottom: 30px;
         }
         
-        .device-circle:hover {
-            transform: scale(1.05);
-        }
-        
-        .device-circle.waiting {
-            background: #2196F3;
-            animation: pulse 2s infinite;
-        }
-        
-        .device-circle.connected {
-            background: #4CAF50;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-        
-        .connection-code {
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: center;
-            font-family: monospace;
-            font-size: 24px;
-            font-weight: bold;
-            letter-spacing: 3px;
-            color: #333;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
+        .role-btn {
+            padding: 15px 30px;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 1.1em;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .btn-primary {
-            background: #2196F3;
+            background: rgba(255, 255, 255, 0.2);
             color: white;
+            border: 2px solid transparent;
         }
         
-        .btn-success {
-            background: #4CAF50;
-            color: white;
-        }
-        
-        .btn-danger {
-            background: #f44336;
-            color: white;
-        }
-        
-        .btn-download {
-            background: #FF9800;
-            color: white;
-            margin: 10px 0;
-        }
-        
-        .btn:hover:not(:disabled) {
+        .role-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
         
-        .input-field {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
+        .role-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: #4ecdc4;
         }
         
-        .input-field:focus {
-            outline: none;
-            border-color: #2196F3;
-        }
-        
-        .file-area {
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            padding: 30px;
+        .connection-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
             text-align: center;
-            margin: 15px 0;
-            transition: all 0.3s ease;
         }
         
-        .file-area.drag-over {
-            border-color: #2196F3;
-            background: rgba(33, 150, 243, 0.1);
-        }
-        
-        .file-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
+        .connection-id {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2em;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
             margin: 10px 0;
-            border-left: 4px solid #2196F3;
-        }
-        
-        .file-name {
-            font-weight: bold;
-            margin-bottom: 5px;
             word-break: break-all;
         }
         
-        .file-size {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 10px;
+        .messages-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
         }
         
-        .progress-container {
+        .message {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 15px;
+            border-radius: 10px;
             margin: 10px 0;
+            word-wrap: break-word;
         }
         
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 8px 0;
+        .message.sent {
+            background: rgba(76, 175, 80, 0.3);
+            margin-left: 20%;
         }
         
-        .progress-fill {
-            height: 100%;
-            background: #4CAF50;
-            width: 0%;
-            transition: width 0.3s ease;
+        .message.received {
+            background: rgba(33, 150, 243, 0.3);
+            margin-right: 20%;
         }
         
-        .progress-text {
-            font-size: 12px;
-            color: #666;
+        .message-input {
             display: flex;
-            justify-content: space-between;
-            margin-top: 5px;
+            gap: 10px;
+            margin-top: 20px;
         }
         
-        .speed-info {
-            font-size: 11px;
-            color: #999;
+        .message-input input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
+        }
+        
+        .message-input input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .send-btn {
+            padding: 15px 30px;
+            background: #4ecdc4;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .send-btn:hover {
+            background: #45b7b8;
+            transform: translateY(-2px);
+        }
+        
+        .send-btn:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
             text-align: center;
-            margin: 5px 0;
-        }
-        
-        .status-message {
-            padding: 12px;
-            border-radius: 8px;
             margin: 10px 0;
-            text-align: center;
+            font-weight: bold;
         }
         
-        .status-success {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 1px solid #c8e6c9;
+        .status.connected {
+            color: #4ecdc4;
         }
         
-        .status-error {
-            background: #ffebee;
-            color: #c62828;
-            border: 1px solid #ffcdd2;
-        }
-        
-        .status-info {
-            background: #e3f2fd;
-            color: #1976d2;
-            border: 1px solid #bbdefb;
+        .status.disconnected {
+            color: #ff6b6b;
         }
         
         .hidden {
             display: none;
         }
         
-        .download-item {
-            background: #e8f5e8;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #4CAF50;
+        .connect-input {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
         }
         
-        .local-network-indicator {
-            background: #fff3e0;
-            color: #ef6c00;
-            padding: 8px;
-            border-radius: 5px;
-            margin: 5px 0;
-            font-size: 11px;
-            text-align: center;
+        .connect-input input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏠 Local Network Transfer</h1>
-            <p>VLC-style high-speed local transfer</p>
+            <h1>🚀 P2P Messaging</h1>
+            <p>High-speed local network messaging</p>
         </div>
         
-        <div class="main">
-            <!-- Device Status -->
-            <div class="device-section">
-                <div id="status-text">Ready to start</div>
-                <div id="device-circle" class="device-circle" onclick="startHost()">
-                    <span id="device-text">START</span>
-                </div>
-                
-                <!-- Connection Code -->
-                <div id="code-section" class="hidden">
-                    <div>Share this code:</div>
-                    <div id="connection-code" class="connection-code">------</div>
-                </div>
+        <div class="role-selection">
+            <button class="role-btn" onclick="setRole('host')">📡 Start Server (Host)</button>
+            <button class="role-btn" onclick="setRole('client')">📱 Connect (Client)</button>
+        </div>
+        
+        <div id="host-section" class="hidden">
+            <div class="connection-info">
+                <h3>🖥️ Server Started!</h3>
+                <p>Share this ID with other devices:</p>
+                <div class="connection-id" id="host-id">Generating...</div>
+                <p>Status: <span class="status" id="host-status">Waiting for connections...</span></p>
             </div>
-            
-            <!-- Messages -->
-            <div id="messages"></div>
-            
-            <!-- File Selection -->
-            <input type="file" id="file-input" multiple style="display: none;">
-            <button class="btn btn-primary" onclick="selectFiles()" id="send-btn" disabled>
-                📤 Select Files to Send
-            </button>
-            
-            <!-- Drag Drop -->
-            <div class="file-area" id="drop-area">
-                <p>📎 Drop files here or click above</p>
+        </div>
+        
+        <div id="client-section" class="hidden">
+            <div class="connection-info">
+                <h3>📱 Connect to Server</h3>
+                <div class="connect-input">
+                    <input type="text" id="connect-id" placeholder="Enter server ID">
+                    <button class="role-btn" onclick="connectToHost()">Connect</button>
+                </div>
+                <p>Status: <span class="status" id="client-status">Not connected</span></p>
             </div>
-            
-            <!-- Sending Files -->
-            <div id="sending-files"></div>
-            
-            <!-- Connection -->
-            <input type="text" id="peer-code" placeholder="Enter code from other device" class="input-field">
-            <button class="btn btn-success" onclick="connectToPeer()" id="connect-btn">
-                🔗 Connect
-            </button>
-            
-            <!-- Received Files -->
-            <div id="received-files"></div>
-            
-            <!-- Disconnect -->
-            <button class="btn btn-danger hidden" onclick="disconnect()" id="disconnect-btn">
-                ❌ Disconnect
-            </button>
+        </div>
+        
+        <div id="chat-section" class="hidden">
+            <div class="messages-container" id="messages"></div>
+            <div class="message-input">
+                <input type="text" id="message-text" placeholder="Type your message..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <button class="send-btn" onclick="sendMessage()" id="send-btn" disabled>Send</button>
+            </div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
-        class LocalNetworkTransfer {
+        class P2PMessaging {
             constructor() {
                 this.peer = null;
                 this.connection = null;
-                this.connectionCode = '';
-                this.isConnected = false;
-                
-                // File transfer state
-                this.sendingFiles = new Map();
-                this.receivingFiles = new Map();
-                
-                // Local network optimized settings
-                this.chunkSize = 1024 * 1024; // 1MB chunks for local network speed
-                this.windowSize = 10; // 10 chunks in parallel for local network
-                this.ackTimeout = 1000; // 1 second timeout for local network
-                this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                
-                // iOS-specific settings to prevent crashes
-                if (this.isIOS) {
-                    this.chunkSize = 512 * 1024; // 512KB for iOS to prevent memory issues
-                    this.windowSize = 5; // Fewer parallel chunks for iOS
-                    this.memoryOptimization = true;
-                }
-                
+                this.isHost = false;
+                this.messages = [];
                 this.init();
             }
             
-            init() {
-                this.setupDragDrop();
-                this.setupFileInput();
-                this.preventIOSRefresh();
-                this.log('Local network transfer system initialized');
-            }
-            
-            log(message) {
-                console.log('[LocalTransfer]', message);
-            }
-            
-            // Prevent iOS Safari auto-refresh issues
-            preventIOSRefresh() {
-                if (this.isIOS) {
-                    // Prevent memory warnings that cause refresh
-                    window.addEventListener('beforeunload', (e) => {
-                        if (this.hasActiveTransfers()) {
-                            e.preventDefault();
-                            e.returnValue = 'File transfer in progress';
-                            return 'File transfer in progress';
-                        }
-                    });
-                    
-                    // Memory management for iOS
-                    window.addEventListener('pagehide', () => {
-                        this.cleanupMemory();
-                    });
-                    
-                    // Prevent iOS bounce/refresh gestures during transfer
-                    document.addEventListener('touchmove', (e) => {
-                        if (this.hasActiveTransfers()) {
-                            e.preventDefault();
-                        }
-                    }, { passive: false });
-                }
-            }
-            
-            hasActiveTransfers() {
-                return this.sendingFiles.size > 0 || this.receivingFiles.size > 0;
-            }
-            
-            cleanupMemory() {
-                // Force garbage collection for iOS
-                this.sendingFiles.clear();
-                this.receivingFiles.clear();
-            }
-            
-            setupDragDrop() {
-                const dropArea = document.getElementById('drop-area');
-                
-                dropArea.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    dropArea.classList.add('drag-over');
-                });
-                
-                dropArea.addEventListener('dragleave', (e) => {
-                    e.preventDefault();
-                    dropArea.classList.remove('drag-over');
-                });
-                
-                dropArea.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    dropArea.classList.remove('drag-over');
-                    this.handleFiles(e.dataTransfer.files);
-                });
-            }
-            
-            setupFileInput() {
-                document.getElementById('file-input').addEventListener('change', (e) => {
-                    this.handleFiles(e.target.files);
-                });
-            }
-            
-            generateCode() {
-                return Math.random().toString(36).substring(2, 8).toUpperCase();
-            }
-            
-            async startHost() {
-                try {
-                    this.connectionCode = this.generateCode();
-                    this.showMessage('Starting local network connection...', 'info');
-                    
-                    // Local network optimized configuration
-                    this.peer = new Peer(this.connectionCode, {
-                        debug: 0,
-                        config: {
-                            iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
-                            ],
-                            // Optimized for local network
-                            iceCandidatePoolSize: 10,
-                            iceTransportPolicy: 'all'
-                        }
-                    });
-                    
-                    this.peer.on('open', (id) => {
-                        this.log(`Local host started: ${id}`);
-                        this.updateStatus('Waiting for local connection...', 'waiting');
-                        this.showConnectionCode();
-                        this.showMessage('Share code with device on same network', 'info');
-                    });
-                    
-                    this.peer.on('connection', (conn) => {
-                        this.log('Local device connected');
-                        this.connection = conn;
-                        this.setupLocalConnection();
-                    });
-                    
-                    this.peer.on('error', (err) => {
-                        this.log(`Peer error: ${err}`);
-                        this.showMessage('Connection failed. Try again.', 'error');
-                        this.resetConnection();
-                    });
-                    
-                } catch (error) {
-                    this.log(`Start error: ${error}`);
-                    this.showMessage('Failed to start. Try again.', 'error');
-                }
-            }
-            
-            async connectToPeer() {
-                const code = document.getElementById('peer-code').value.trim().toUpperCase();
-                if (!code) {
-                    this.showMessage('Please enter a code', 'error');
-                    return;
-                }
-                
-                try {
-                    this.showMessage('Connecting to local network...', 'info');
-                    
-                    this.peer = new Peer({
-                        debug: 0,
-                        config: {
-                            iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' }
-                            ],
-                            iceCandidatePoolSize: 10,
-                            iceTransportPolicy: 'all'
-                        }
-                    });
-                    
-                    this.peer.on('open', () => {
-                        this.log('Connecting to local peer');
-                        this.connection = this.peer.connect(code, {
-                            reliable: true,
-                            serialization: 'binary'
-                        });
-                        this.setupLocalConnection();
-                        this.updateStatus('Connecting...', 'waiting');
-                    });
-                    
-                    this.peer.on('error', (err) => {
-                        this.log(`Connect error: ${err}`);
-                        this.showMessage('Failed to connect. Check code.', 'error');
-                        this.resetConnection();
-                    });
-                    
-                } catch (error) {
-                    this.log(`Connect error: ${error}`);
-                    this.showMessage('Connection failed. Try again.', 'error');
-                }
-            }
-            
-            setupLocalConnection() {
-                if (!this.connection) return;
-                
-                this.connection.on('open', () => {
-                    this.log('Local network connection established');
-                    this.isConnected = true;
-                    this.updateStatus('Connected!', 'connected');
-                    this.showMessage('🏠 Local network ready for high-speed transfer!', 'success');
-                    this.enableFileSharing();
-                });
-                
-                this.connection.on('data', (data) => {
-                    this.handleLocalData(data);
-                });
-                
-                this.connection.on('close', () => {
-                    this.log('Local connection closed');
-                    this.showMessage('Connection closed', 'error');
-                    this.resetConnection();
-                });
-                
-                this.connection.on('error', (err) => {
-                    this.log(`Connection error: ${err}`);
-                    this.showMessage('Connection error', 'error');
-                    this.resetConnection();
-                });
-            }
-            
-            showConnectionCode() {
-                document.getElementById('connection-code').textContent = this.connectionCode;
-                document.getElementById('code-section').classList.remove('hidden');
-            }
-            
-            updateStatus(message, state) {
-                document.getElementById('status-text').textContent = message;
-                const circle = document.getElementById('device-circle');
-                const text = document.getElementById('device-text');
-                
-                circle.className = 'device-circle';
-                if (state) circle.classList.add(state);
-                
-                switch (state) {
-                    case 'waiting':
-                        text.textContent = 'WAITING';
-                        break;
-                    case 'connected':
-                        text.textContent = 'CONNECTED';
-                        break;
-                    default:
-                        text.textContent = 'START';
-                }
-            }
-            
-            enableFileSharing() {
-                document.getElementById('send-btn').disabled = false;
-                document.getElementById('connect-btn').classList.add('hidden');
-                document.getElementById('disconnect-btn').classList.remove('hidden');
-            }
-            
-            handleFiles(files) {
-                if (!this.isConnected) {
-                    this.showMessage('Please connect first', 'error');
-                    return;
-                }
-                
-                Array.from(files).forEach((file, index) => {
-                    this.sendFileLocal(file, `file_${Date.now()}_${index}`);
-                });
-            }
-            
-            async sendFileLocal(file, fileId) {
-                this.log(`Starting local network send: ${file.name}`);
-                
-                const totalChunks = Math.ceil(file.size / this.chunkSize);
-                
-                const fileState = {
-                    file: file,
-                    fileId: fileId,
-                    totalChunks: totalChunks,
-                    sentChunks: 0,
-                    ackedChunks: new Set(),
-                    startTime: Date.now(),
-                    inFlight: new Set(),
-                    nextChunk: 0
+            async init() {
+                // Using PeerJS for WebRTC signaling
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js';
+                script.onload = () => {
+                    console.log('PeerJS loaded');
                 };
+                document.head.appendChild(script);
+            }
+            
+            generateId() {
+                return Math.random().toString(36).substr(2, 9);
+            }
+            
+            startHost() {
+                const hostId = this.generateId();
                 
-                this.sendingFiles.set(fileId, fileState);
-                this.showSendingFile(fileState);
-                
-                // Send file metadata
-                this.sendData({
-                    type: 'file-start',
-                    fileId: fileId,
-                    name: file.name,
-                    size: file.size,
-                    totalChunks: totalChunks,
-                    chunkSize: this.chunkSize
+                // Initialize peer with custom ID
+                this.peer = new Peer(hostId, {
+                    host: 'peerjs-server.herokuapp.com',
+                    port: 443,
+                    path: '/',
+                    secure: true
                 });
                 
-                // Start local network streaming
-                this.streamFileLocal(fileId);
-            }
-            
-            async streamFileLocal(fileId) {
-                const fileState = this.sendingFiles.get(fileId);
-                if (!fileState) return;
+                this.peer.on('open', (id) => {
+                    document.getElementById('host-id').textContent = id;
+                    document.getElementById('host-status').textContent = 'Server running - waiting for connections...';
+                    document.getElementById('host-status').className = 'status connected';
+                });
                 
-                // Fill the window with chunks
-                while (fileState.inFlight.size < this.windowSize && fileState.nextChunk < fileState.totalChunks) {
-                    if (!fileState.ackedChunks.has(fileState.nextChunk)) {
-                        this.sendChunkLocal(fileId, fileState.nextChunk);
-                    }
-                    fileState.nextChunk++;
-                }
-                
-                // Check completion
-                if (fileState.ackedChunks.size === fileState.totalChunks) {
-                    this.completeLocalSend(fileId);
-                }
-            }
-            
-            async sendChunkLocal(fileId, chunkIndex) {
-                const fileState = this.sendingFiles.get(fileId);
-                if (!fileState) return;
-                
-                try {
-                    const start = chunkIndex * this.chunkSize;
-                    const end = Math.min(start + this.chunkSize, fileState.file.size);
-                    const chunk = fileState.file.slice(start, end);
+                this.peer.on('connection', (conn) => {
+                    this.connection = conn;
+                    document.getElementById('host-status').textContent = 'Client connected!';
+                    document.getElementById('chat-section').classList.remove('hidden');
                     
-                    let arrayBuffer;
-                    if (this.isIOS) {
-                        // iOS-safe chunk reading
-                        arrayBuffer = await this.readChunkSafely(chunk);
-                    } else {
-                        arrayBuffer = await chunk.arrayBuffer();
-                    }
-                    
-                    fileState.inFlight.add(chunkIndex);
-                    
-                    this.sendData({
-                        type: 'file-chunk',
-                        fileId: fileId,
-                        chunkIndex: chunkIndex,
-                        data: arrayBuffer
+                    conn.on('data', (data) => {
+                        this.receiveMessage(data);
                     });
                     
-                    this.updateSendProgress(fileId);
-                    
-                    // Local network timeout
-                    setTimeout(() => {
-                        if (!fileState.ackedChunks.has(chunkIndex)) {
-                            fileState.inFlight.delete(chunkIndex);
-                            this.streamFileLocal(fileId);
-                        }
-                    }, this.ackTimeout);
-                    
-                } catch (error) {
-                    this.log(`Error sending chunk ${chunkIndex}: ${error}`);
-                    fileState.inFlight.delete(chunkIndex);
-                }
-            }
-            
-            // iOS-safe chunk reading
-            async readChunkSafely(chunk) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = () => reject(reader.error);
-                    reader.readAsArrayBuffer(chunk);
+                    conn.on('close', () => {
+                        document.getElementById('host-status').textContent = 'Client disconnected';
+                        document.getElementById('host-status').className = 'status disconnected';
+                    });
+                });
+                
+                this.peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    document.getElementById('host-status').textContent = 'Error: ' + err.message;
+                    document.getElementById('host-status').className = 'status disconnected';
                 });
             }
             
-            sendData(data) {
-                if (this.connection && this.isConnected) {
-                    try {
-                        this.connection.send(data);
-                    } catch (error) {
-                        this.log(`Send error: ${error}`);
-                    }
-                }
-            }
-            
-            handleLocalData(data) {
-                switch (data.type) {
-                    case 'file-start':
-                        this.handleFileStart(data);
-                        break;
-                    case 'file-chunk':
-                        this.handleFileChunk(data);
-                        break;
-                    case 'chunk-ack':
-                        this.handleChunkAck(data);
-                        break;
-                }
-            }
-            
-            handleFileStart(data) {
-                this.log(`Receiving file: ${data.name}`);
+            connectToHost(hostId) {
+                this.peer = new Peer({
+                    host: 'peerjs-server.herokuapp.com',
+                    port: 443,
+                    path: '/',
+                    secure: true
+                });
                 
-                const fileState = {
-                    name: data.name,
-                    size: data.size,
-                    fileId: data.fileId,
-                    totalChunks: data.totalChunks,
-                    chunkSize: data.chunkSize,
-                    chunks: new Array(data.totalChunks),
-                    receivedChunks: new Set(),
-                    startTime: Date.now()
-                };
-                
-                this.receivingFiles.set(data.fileId, fileState);
-                this.showReceivingFile(fileState);
-            }
-            
-            handleFileChunk(data) {
-                const fileState = this.receivingFiles.get(data.fileId);
-                if (!fileState) return;
-                
-                // Store chunk with iOS memory management
-                if (this.isIOS && this.memoryOptimization) {
-                    // For iOS, immediately acknowledge and don't keep all chunks in memory
-                    this.sendData({
-                        type: 'chunk-ack',
-                        fileId: data.fileId,
-                        chunkIndex: data.chunkIndex
+                this.peer.on('open', () => {
+                    this.connection = this.peer.connect(hostId);
+                    
+                    this.connection.on('open', () => {
+                        document.getElementById('client-status').textContent = 'Connected to server!';
+                        document.getElementById('client-status').className = 'status connected';
+                        document.getElementById('chat-section').classList.remove('hidden');
+                        document.getElementById('send-btn').disabled = false;
                     });
                     
-                    // Store chunk temporarily
-                    fileState.chunks[data.chunkIndex] = new Uint8Array(data.data);
-                    fileState.receivedChunks.add(data.chunkIndex);
-                    
-                    this.updateReceiveProgress(data.fileId);
-                    
-                    // Check if complete and assemble immediately
-                    if (fileState.receivedChunks.size === fileState.totalChunks) {
-                        setTimeout(() => this.assembleFileLocal(data.fileId), 100);
-                    }
-                } else {
-                    // Standard handling for non-iOS
-                    fileState.chunks[data.chunkIndex] = new Uint8Array(data.data);
-                    fileState.receivedChunks.add(data.chunkIndex);
-                    
-                    this.sendData({
-                        type: 'chunk-ack',
-                        fileId: data.fileId,
-                        chunkIndex: data.chunkIndex
+                    this.connection.on('error', (err) => {
+                        document.getElementById('client-status').textContent = 'Connection failed: ' + err.message;
+                        document.getElementById('client-status').className = 'status disconnected';
+                    });
+                });
+            }
+            
+            sendMessage(text) {
+                if (this.connection && this.connection.open) {
+                    this.connection.send({
+                        type: 'message',
+                        text: text,
+                        timestamp: new Date().toLocaleTimeString()
                     });
                     
-                    this.updateReceiveProgress(data.fileId);
-                    
-                    if (fileState.receivedChunks.size === fileState.totalChunks) {
-                        this.assembleFileLocal(data.fileId);
-                    }
+                    this.addMessage(text, 'sent');
+                    return true;
+                }
+                return false;
+            }
+            
+            receiveMessage(data) {
+                if (data.type === 'message') {
+                    this.addMessage(data.text, 'received');
                 }
             }
             
-            handleChunkAck(data) {
-                const fileState = this.sendingFiles.get(data.fileId);
-                if (!fileState) return;
-                
-                fileState.ackedChunks.add(data.chunkIndex);
-                fileState.inFlight.delete(data.chunkIndex);
-                
-                this.updateSendProgress(data.fileId);
-                this.streamFileLocal(data.fileId);
-            }
-            
-            completeLocalSend(fileId) {
-                const fileState = this.sendingFiles.get(fileId);
-                if (!fileState) return;
-                
-                const duration = (Date.now() - fileState.startTime) / 1000;
-                const speed = (fileState.file.size / duration / 1024 / 1024).toFixed(1);
-                
-                this.log(`Local transfer complete: ${fileState.file.name} at ${speed} MB/s`);
-                
-                const fileDiv = document.getElementById(`sending-${fileId}`);
-                if (fileDiv) {
-                    fileDiv.querySelector('.progress-text').innerHTML = `<span>✅ Sent at ${speed} MB/s!</span>`;
-                    fileDiv.querySelector('.local-network-indicator').textContent = `✅ Local network transfer complete - ${speed} MB/s`;
-                }
-                
-                this.sendingFiles.delete(fileId);
-                this.showMessage(`✅ ${fileState.file.name} sent at ${speed} MB/s!`, 'success');
-            }
-            
-            assembleFileLocal(fileId) {
-                const fileState = this.receivingFiles.get(fileId);
-                if (!fileState) return;
-                
-                this.log(`Assembling local file: ${fileState.name}`);
-                
-                try {
-                    // Calculate total size
-                    let totalSize = 0;
-                    fileState.chunks.forEach(chunk => {
-                        if (chunk) totalSize += chunk.length;
-                    });
-                    
-                    // Assemble file
-                    const assembled = new Uint8Array(totalSize);
-                    let offset = 0;
-                    
-                    fileState.chunks.forEach(chunk => {
-                        if (chunk) {
-                            assembled.set(chunk, offset);
-                            offset += chunk.length;
-                        }
-                    });
-                    
-                    // Create blob
-                    const blob = new Blob([assembled]);
-                    fileState.blob = blob;
-                    
-                    const duration = (Date.now() - fileState.startTime) / 1000;
-                    const speed = (fileState.size / duration / 1024 / 1024).toFixed(1);
-                    
-                    this.log(`Local file assembled: ${fileState.name} at ${speed} MB/s`);
-                    
-                    // Clear chunks from memory immediately for iOS
-                    if (this.isIOS) {
-                        fileState.chunks = null;
-                    }
-                    
-                    // Update UI
-                    const fileDiv = document.getElementById(`receiving-${fileId}`);
-                    fileDiv.className = 'download-item';
-                    fileDiv.innerHTML = `
-                        <div class="file-name">✅ ${fileState.name}</div>
-                        <div class="file-size">${this.formatFileSize(blob.size)}</div>
-                        <div class="local-network-indicator">✅ Local network transfer complete - ${speed} MB/s</div>
-                        <button class="btn btn-download" onclick="app.downloadFile('${fileId}')">
-                            💾 Download File
-                        </button>
-                    `;
-                    
-                    this.showMessage(`✅ ${fileState.name} ready at ${speed} MB/s!`, 'success');
-                    
-                } catch (error) {
-                    this.log(`Assembly error: ${error}`);
-                    this.showMessage(`Error receiving ${fileState.name}`, 'error');
-                }
-            }
-            
-            showSendingFile(fileState) {
-                const container = document.getElementById('sending-files');
-                const fileDiv = document.createElement('div');
-                fileDiv.className = 'file-item';
-                fileDiv.id = `sending-${fileState.fileId}`;
-                fileDiv.innerHTML = `
-                    <div class="file-name">${fileState.file.name}</div>
-                    <div class="file-size">${this.formatFileSize(fileState.file.size)}</div>
-                    <div class="local-network-indicator">🏠 Local network transfer with ${this.chunkSize/1024}KB chunks</div>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="send-progress-${fileState.fileId}"></div>
-                        </div>
-                        <div class="progress-text" id="send-text-${fileState.fileId}">
-                            <span>Starting...</span>
-                        </div>
-                        <div class="speed-info" id="send-speed-${fileState.fileId}">
-                            0/${fileState.totalChunks} chunks sent
-                        </div>
-                    </div>
-                `;
-                container.appendChild(fileDiv);
-            }
-            
-            showReceivingFile(fileState) {
-                const container = document.getElementById('received-files');
-                const fileDiv = document.createElement('div');
-                fileDiv.className = 'file-item';
-                fileDiv.id = `receiving-${fileState.fileId}`;
-                fileDiv.innerHTML = `
-                    <div class="file-name">📥 ${fileState.name}</div>
-                    <div class="file-size">${this.formatFileSize(fileState.size)}</div>
-                    <div class="local-network-indicator">🏠 Receiving via local network</div>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="receive-progress-${fileState.fileId}"></div>
-                        </div>
-                        <div class="progress-text" id="receive-text-${fileState.fileId}">
-                            <span>Receiving...</span>
-                        </div>
-                        <div class="speed-info" id="receive-speed-${fileState.fileId}">
-                            0/${fileState.totalChunks} chunks received
-                        </div>
-                    </div>
-                `;
-                container.appendChild(fileDiv);
-                
-                this.showMessage(`📥 Receiving ${fileState.name} via local network...`, 'info');
-            }
-            
-            updateSendProgress(fileId) {
-                const fileState = this.sendingFiles.get(fileId);
-                if (!fileState) return;
-                
-                const progress = (fileState.ackedChunks.size / fileState.totalChunks) * 100;
-                const progressBar = document.getElementById(`send-progress-${fileId}`);
-                const progressText = document.getElementById(`send-text-${fileId}`);
-                const speedInfo = document.getElementById(`send-speed-${fileId}`);
-                
-                if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
-                if (speedInfo) speedInfo.textContent = `${fileState.ackedChunks.size}/${fileState.totalChunks} chunks confirmed`;
-            }
-            
-            updateReceiveProgress(fileId) {
-                const fileState = this.receivingFiles.get(fileId);
-                if (!fileState) return;
-                
-                const progress = (fileState.receivedChunks.size / fileState.totalChunks) * 100;
-                const progressBar = document.getElementById(`receive-progress-${fileId}`);
-                const progressText = document.getElementById(`receive-text-${fileId}`);
-                const speedInfo = document.getElementById(`receive-speed-${fileId}`);
-                
-                if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
-                if (speedInfo) speedInfo.textContent = `${fileState.receivedChunks.size}/${fileState.totalChunks} chunks received`;
-            }
-            
-            downloadFile(fileId) {
-                const fileState = this.receivingFiles.get(fileId);
-                if (!fileState || !fileState.blob) {
-                    this.showMessage('File not available', 'error');
-                    return;
-                }
-                
-                try {
-                    if (this.isIOS && navigator.share) {
-                        const file = new File([fileState.blob], fileState.name);
-                        navigator.share({
-                            files: [file],
-                            title: fileState.name
-                        }).then(() => {
-                            this.showMessage(`Shared: ${fileState.name}`, 'success');
-                        }).catch(err => {
-                            this.log(`Share failed: ${err}`);
-                            this.regularDownload(fileState.blob, fileState.name);
-                        });
-                    } else {
-                        this.regularDownload(fileState.blob, fileState.name);
-                    }
-                    
-                } catch (error) {
-                    this.log(`Download error: ${error}`);
-                    this.showMessage('Download failed', 'error');
-                }
-            }
-            
-            regularDownload(blob, filename) {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                a.style.display = 'none';
-                
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                
-                this.showMessage(`Downloaded: ${filename}`, 'success');
-                this.log(`Download completed: ${filename}`);
-            }
-            
-            disconnect() {
-                if (this.connection) this.connection.close();
-                if (this.peer) this.peer.destroy();
-                this.resetConnection();
-                this.showMessage('Disconnected', 'info');
-            }
-            
-            resetConnection() {
-                this.peer = null;
-                this.connection = null;
-                this.isConnected = false;
-                this.connectionCode = '';
-                this.cleanupMemory();
-                
-                this.updateStatus('Ready to start', '');
-                document.getElementById('code-section').classList.add('hidden');
-                document.getElementById('send-btn').disabled = true;
-                document.getElementById('connect-btn').classList.remove('hidden');
-                document.getElementById('disconnect-btn').classList.add('hidden');
-                document.getElementById('sending-files').innerHTML = '';
-                document.getElementById('received-files').innerHTML = '';
-            }
-            
-            formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-            
-            showMessage(message, type) {
-                const container = document.getElementById('messages');
+            addMessage(text, type) {
+                const messagesContainer = document.getElementById('messages');
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `status-message status-${type}`;
-                messageDiv.textContent = message;
-                
-                container.innerHTML = '';
-                container.appendChild(messageDiv);
-                
-                setTimeout(() => {
-                    if (container.contains(messageDiv)) {
-                        container.removeChild(messageDiv);
-                    }
-                }, 4000);
+                messageDiv.className = `message ${type}`;
+                messageDiv.innerHTML = `
+                    <div>${text}</div>
+                    <small>${new Date().toLocaleTimeString()}</small>
+                `;
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         }
         
-        // Initialize app
-        const app = new LocalNetworkTransfer();
+        const messaging = new P2PMessaging();
         
-        // Global functions
-        function startHost() {
-            const deviceText = document.getElementById('device-text');
-            if (deviceText.textContent === 'START') {
-                app.startHost();
+        function setRole(role) {
+            // Clear previous selections
+            document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('[id$="-section"]').forEach(section => section.classList.add('hidden'));
+            
+            // Set active role
+            event.target.classList.add('active');
+            
+            if (role === 'host') {
+                messaging.isHost = true;
+                document.getElementById('host-section').classList.remove('hidden');
+                messaging.startHost();
+            } else {
+                messaging.isHost = false;
+                document.getElementById('client-section').classList.remove('hidden');
             }
         }
         
-        function selectFiles() {
-            document.getElementById('file-input').click();
+        function connectToHost() {
+            const hostId = document.getElementById('connect-id').value.trim();
+            if (hostId) {
+                messaging.connectToHost(hostId);
+            }
         }
         
-        function connectToPeer() {
-            app.connectToPeer();
+        function sendMessage() {
+            const messageInput = document.getElementById('message-text');
+            const text = messageInput.value.trim();
+            
+            if (text && messaging.sendMessage(text)) {
+                messageInput.value = '';
+            }
         }
         
-        function disconnect() {
-            app.disconnect();
-        }
+        // Enable send button when connected
+        document.addEventListener('DOMContentLoaded', () => {
+            const messageInput = document.getElementById('message-text');
+            messageInput.addEventListener('input', () => {
+                const sendBtn = document.getElementById('send-btn');
+                sendBtn.disabled = !messageInput.value.trim() || !messaging.connection?.open;
+            });
+        });
     </script>
 </body>
 </html>
