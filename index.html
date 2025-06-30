@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reliable File Transfer</title>
+    <title>Local Network Transfer</title>
     <style>
         * {
             margin: 0;
@@ -214,7 +214,7 @@
             margin-top: 5px;
         }
         
-        .chunk-info {
+        .speed-info {
             font-size: 11px;
             color: #999;
             text-align: center;
@@ -258,7 +258,7 @@
             border-left: 4px solid #4CAF50;
         }
         
-        .reliability-indicator {
+        .local-network-indicator {
             background: #fff3e0;
             color: #ef6c00;
             padding: 8px;
@@ -272,8 +272,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>⚡ High-Speed Transfer</h1>
-            <p>Ultra-fast + 100% reliable delivery</p>
+            <h1>🏠 Local Network Transfer</h1>
+            <p>VLC-style high-speed local transfer</p>
         </div>
         
         <div class="main">
@@ -326,7 +326,7 @@
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
-        class ReliableFileTransfer {
+        class LocalNetworkTransfer {
             constructor() {
                 this.peer = null;
                 this.connection = null;
@@ -337,16 +337,18 @@
                 this.sendingFiles = new Map();
                 this.receivingFiles = new Map();
                 
-                // Reliability settings
-                this.chunkSize = 128 * 1024; // 128KB chunks for speed
-                this.maxRetries = 3;
-                this.chunkTimeout = 5000; // 5 seconds per chunk
-                this.ackTimeout = 2000; // 2 seconds for acknowledgment
+                // Local network optimized settings
+                this.chunkSize = 1024 * 1024; // 1MB chunks for local network speed
+                this.windowSize = 10; // 10 chunks in parallel for local network
+                this.ackTimeout = 1000; // 1 second timeout for local network
+                this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
                 
-                // Speed optimizations
-                this.windowSize = 20; // Send 20 chunks in parallel
-                this.batchAckSize = 5; // Batch ACKs for efficiency
-                this.adaptiveChunking = true;
+                // iOS-specific settings to prevent crashes
+                if (this.isIOS) {
+                    this.chunkSize = 512 * 1024; // 512KB for iOS to prevent memory issues
+                    this.windowSize = 5; // Fewer parallel chunks for iOS
+                    this.memoryOptimization = true;
+                }
                 
                 this.init();
             }
@@ -354,11 +356,48 @@
             init() {
                 this.setupDragDrop();
                 this.setupFileInput();
-                this.log('Reliable transfer system initialized');
+                this.preventIOSRefresh();
+                this.log('Local network transfer system initialized');
             }
             
             log(message) {
-                console.log('[ReliableTransfer]', message);
+                console.log('[LocalTransfer]', message);
+            }
+            
+            // Prevent iOS Safari auto-refresh issues
+            preventIOSRefresh() {
+                if (this.isIOS) {
+                    // Prevent memory warnings that cause refresh
+                    window.addEventListener('beforeunload', (e) => {
+                        if (this.hasActiveTransfers()) {
+                            e.preventDefault();
+                            e.returnValue = 'File transfer in progress';
+                            return 'File transfer in progress';
+                        }
+                    });
+                    
+                    // Memory management for iOS
+                    window.addEventListener('pagehide', () => {
+                        this.cleanupMemory();
+                    });
+                    
+                    // Prevent iOS bounce/refresh gestures during transfer
+                    document.addEventListener('touchmove', (e) => {
+                        if (this.hasActiveTransfers()) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                }
+            }
+            
+            hasActiveTransfers() {
+                return this.sendingFiles.size > 0 || this.receivingFiles.size > 0;
+            }
+            
+            cleanupMemory() {
+                // Force garbage collection for iOS
+                this.sendingFiles.clear();
+                this.receivingFiles.clear();
             }
             
             setupDragDrop() {
@@ -394,33 +433,32 @@
             async startHost() {
                 try {
                     this.connectionCode = this.generateCode();
-                    this.showMessage('Starting reliable connection...', 'info');
+                    this.showMessage('Starting local network connection...', 'info');
                     
+                    // Local network optimized configuration
                     this.peer = new Peer(this.connectionCode, {
                         debug: 0,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' },
-                                { urls: 'stun:stun1.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' }
                             ],
-                            // High-speed optimizations
-                            sdpSemantics: 'unified-plan',
-                            bundlePolicy: 'max-bundle',
-                            rtcpMuxPolicy: 'require'
+                            // Optimized for local network
+                            iceCandidatePoolSize: 10,
+                            iceTransportPolicy: 'all'
                         }
                     });
                     
                     this.peer.on('open', (id) => {
-                        this.log(`Host started: ${id}`);
-                        this.updateStatus('Waiting for connection...', 'waiting');
+                        this.log(`Local host started: ${id}`);
+                        this.updateStatus('Waiting for local connection...', 'waiting');
                         this.showConnectionCode();
-                        this.showMessage('Share the code with other device', 'info');
+                        this.showMessage('Share code with device on same network', 'info');
                     });
                     
                     this.peer.on('connection', (conn) => {
-                        this.log('Incoming connection');
+                        this.log('Local device connected');
                         this.connection = conn;
-                        this.setupReliableConnection();
+                        this.setupLocalConnection();
                     });
                     
                     this.peer.on('error', (err) => {
@@ -443,31 +481,26 @@
                 }
                 
                 try {
-                    this.showMessage('Connecting...', 'info');
+                    this.showMessage('Connecting to local network...', 'info');
                     
                     this.peer = new Peer({
                         debug: 0,
                         config: {
                             iceServers: [
-                                { urls: 'stun:stun.l.google.com:19302' },
-                                { urls: 'stun:stun1.l.google.com:19302' }
+                                { urls: 'stun:stun.l.google.com:19302' }
                             ],
-                            // High-speed optimizations
-                            sdpSemantics: 'unified-plan',
-                            bundlePolicy: 'max-bundle',
-                            rtcpMuxPolicy: 'require'
+                            iceCandidatePoolSize: 10,
+                            iceTransportPolicy: 'all'
                         }
                     });
                     
                     this.peer.on('open', () => {
-                        this.log('Connecting to peer');
+                        this.log('Connecting to local peer');
                         this.connection = this.peer.connect(code, {
                             reliable: true,
-                            // High-speed data channel optimizations
-                            serialization: 'binary',
-                            metadata: { highSpeed: true }
+                            serialization: 'binary'
                         });
-                        this.setupReliableConnection();
+                        this.setupLocalConnection();
                         this.updateStatus('Connecting...', 'waiting');
                     });
                     
@@ -483,23 +516,23 @@
                 }
             }
             
-            setupReliableConnection() {
+            setupLocalConnection() {
                 if (!this.connection) return;
                 
                 this.connection.on('open', () => {
-                    this.log('Reliable connection established');
+                    this.log('Local network connection established');
                     this.isConnected = true;
                     this.updateStatus('Connected!', 'connected');
-                    this.showMessage('✅ High-speed reliable connection ready!', 'success');
+                    this.showMessage('🏠 Local network ready for high-speed transfer!', 'success');
                     this.enableFileSharing();
                 });
                 
                 this.connection.on('data', (data) => {
-                    this.handleReliableData(data);
+                    this.handleLocalData(data);
                 });
                 
                 this.connection.on('close', () => {
-                    this.log('Connection closed');
+                    this.log('Local connection closed');
                     this.showMessage('Connection closed', 'error');
                     this.resetConnection();
                 });
@@ -549,36 +582,31 @@
                 }
                 
                 Array.from(files).forEach((file, index) => {
-                    this.sendFileReliably(file, `file_${Date.now()}_${index}`);
+                    this.sendFileLocal(file, `file_${Date.now()}_${index}`);
                 });
             }
             
-            async sendFileReliably(file, fileId) {
-                this.log(`Starting high-speed reliable send: ${file.name}`);
+            async sendFileLocal(file, fileId) {
+                this.log(`Starting local network send: ${file.name}`);
                 
                 const totalChunks = Math.ceil(file.size / this.chunkSize);
                 
-                // Initialize file transfer state
                 const fileState = {
                     file: file,
                     fileId: fileId,
                     totalChunks: totalChunks,
                     sentChunks: 0,
                     ackedChunks: new Set(),
-                    retryCount: new Map(),
                     startTime: Date.now(),
-                    lastProgressTime: Date.now(),
-                    lastProgressChunks: 0,
-                    inFlight: new Set(), // Chunks currently being sent
-                    nextChunkToSend: 0,
-                    pendingAcks: [] // For batching ACKs
+                    inFlight: new Set(),
+                    nextChunk: 0
                 };
                 
                 this.sendingFiles.set(fileId, fileState);
                 this.showSendingFile(fileState);
                 
                 // Send file metadata
-                this.sendReliableData({
+                this.sendData({
                     type: 'file-start',
                     fileId: fileId,
                     name: file.name,
@@ -587,101 +615,81 @@
                     chunkSize: this.chunkSize
                 });
                 
-                // Start high-speed parallel sending
-                this.startParallelSending(fileId);
+                // Start local network streaming
+                this.streamFileLocal(fileId);
             }
             
-            async startParallelSending(fileId) {
+            async streamFileLocal(fileId) {
                 const fileState = this.sendingFiles.get(fileId);
                 if (!fileState) return;
                 
-                // Fill the sending window with parallel chunks
-                while (fileState.inFlight.size < this.windowSize && fileState.nextChunkToSend < fileState.totalChunks) {
-                    const chunkIndex = fileState.nextChunkToSend;
-                    
-                    // Skip if already ACKed
-                    if (fileState.ackedChunks.has(chunkIndex)) {
-                        fileState.nextChunkToSend++;
-                        continue;
+                // Fill the window with chunks
+                while (fileState.inFlight.size < this.windowSize && fileState.nextChunk < fileState.totalChunks) {
+                    if (!fileState.ackedChunks.has(fileState.nextChunk)) {
+                        this.sendChunkLocal(fileId, fileState.nextChunk);
                     }
-                    
-                    // Skip if too many retries
-                    const retries = fileState.retryCount.get(chunkIndex) || 0;
-                    if (retries >= this.maxRetries) {
-                        fileState.nextChunkToSend++;
-                        continue;
-                    }
-                    
-                    // Send chunk
-                    fileState.inFlight.add(chunkIndex);
-                    fileState.nextChunkToSend++;
-                    this.sendChunkAsync(fileId, chunkIndex);
+                    fileState.nextChunk++;
                 }
                 
-                // Check if transfer is complete
+                // Check completion
                 if (fileState.ackedChunks.size === fileState.totalChunks) {
-                    this.completeSend(fileId);
-                } else if (fileState.inFlight.size === 0 && fileState.nextChunkToSend >= fileState.totalChunks) {
-                    // No more chunks to send and nothing in flight - check for failures
-                    const failedChunks = [];
-                    for (let i = 0; i < fileState.totalChunks; i++) {
-                        if (!fileState.ackedChunks.has(i)) {
-                            const retries = fileState.retryCount.get(i) || 0;
-                            if (retries >= this.maxRetries) {
-                                failedChunks.push(i);
-                            }
-                        }
-                    }
-                    
-                    if (failedChunks.length > 0) {
-                        this.showMessage(`Transfer failed: ${fileState.file.name} - ${failedChunks.length} chunks failed`, 'error');
-                    }
+                    this.completeLocalSend(fileId);
                 }
             }
             
-            async sendChunkAsync(fileId, chunkIndex) {
+            async sendChunkLocal(fileId, chunkIndex) {
                 const fileState = this.sendingFiles.get(fileId);
                 if (!fileState) return;
                 
                 try {
-                    // Read chunk
                     const start = chunkIndex * this.chunkSize;
                     const end = Math.min(start + this.chunkSize, fileState.file.size);
                     const chunk = fileState.file.slice(start, end);
-                    const arrayBuffer = await chunk.arrayBuffer();
                     
-                    // Track retry
-                    const retryCount = fileState.retryCount.get(chunkIndex) || 0;
-                    fileState.retryCount.set(chunkIndex, retryCount + 1);
+                    let arrayBuffer;
+                    if (this.isIOS) {
+                        // iOS-safe chunk reading
+                        arrayBuffer = await this.readChunkSafely(chunk);
+                    } else {
+                        arrayBuffer = await chunk.arrayBuffer();
+                    }
                     
-                    // Send chunk
-                    this.sendReliableData({
+                    fileState.inFlight.add(chunkIndex);
+                    
+                    this.sendData({
                         type: 'file-chunk',
                         fileId: fileId,
                         chunkIndex: chunkIndex,
-                        data: arrayBuffer,
-                        retryCount: retryCount
+                        data: arrayBuffer
                     });
                     
                     this.updateSendProgress(fileId);
                     
-                    // Set timeout for this chunk
+                    // Local network timeout
                     setTimeout(() => {
                         if (!fileState.ackedChunks.has(chunkIndex)) {
                             fileState.inFlight.delete(chunkIndex);
-                            this.log(`Chunk ${chunkIndex} timeout, will retry`);
-                            this.startParallelSending(fileId); // Continue sending
+                            this.streamFileLocal(fileId);
                         }
                     }, this.ackTimeout);
                     
                 } catch (error) {
                     this.log(`Error sending chunk ${chunkIndex}: ${error}`);
                     fileState.inFlight.delete(chunkIndex);
-                    setTimeout(() => this.startParallelSending(fileId), 100);
                 }
             }
             
-            sendReliableData(data) {
+            // iOS-safe chunk reading
+            async readChunkSafely(chunk) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsArrayBuffer(chunk);
+                });
+            }
+            
+            sendData(data) {
                 if (this.connection && this.isConnected) {
                     try {
                         this.connection.send(data);
@@ -691,7 +699,7 @@
                 }
             }
             
-            handleReliableData(data) {
+            handleLocalData(data) {
                 switch (data.type) {
                     case 'file-start':
                         this.handleFileStart(data);
@@ -701,12 +709,6 @@
                         break;
                     case 'chunk-ack':
                         this.handleChunkAck(data);
-                        break;
-                    case 'batch-ack':
-                        this.handleBatchAck(data);
-                        break;
-                    case 'file-complete':
-                        this.handleFileComplete(data);
                         break;
                 }
             }
@@ -720,73 +722,54 @@
                     fileId: data.fileId,
                     totalChunks: data.totalChunks,
                     chunkSize: data.chunkSize,
-                    chunks: new Array(data.totalChunks).fill(null),
+                    chunks: new Array(data.totalChunks),
                     receivedChunks: new Set(),
-                    startTime: Date.now(),
-                    lastProgressTime: Date.now(),
-                    lastProgressChunks: 0
+                    startTime: Date.now()
                 };
                 
                 this.receivingFiles.set(data.fileId, fileState);
                 this.showReceivingFile(fileState);
-                
-                // Send acknowledgment
-                this.sendReliableData({
-                    type: 'file-start-ack',
-                    fileId: data.fileId
-                });
             }
             
             handleFileChunk(data) {
                 const fileState = this.receivingFiles.get(data.fileId);
                 if (!fileState) return;
                 
-                // Store chunk
-                fileState.chunks[data.chunkIndex] = new Uint8Array(data.data);
-                fileState.receivedChunks.add(data.chunkIndex);
-                
-                this.log(`Received chunk ${data.chunkIndex}/${fileState.totalChunks}`);
-                
-                // Add to batch ACK queue for speed
-                fileState.pendingAcks = fileState.pendingAcks || [];
-                fileState.pendingAcks.push(data.chunkIndex);
-                
-                // Send batch ACK when we have enough or timeout
-                if (fileState.pendingAcks.length >= this.batchAckSize) {
-                    this.sendBatchAck(data.fileId);
-                } else {
-                    // Set timeout for batch ACK
-                    if (!fileState.ackTimer) {
-                        fileState.ackTimer = setTimeout(() => {
-                            this.sendBatchAck(data.fileId);
-                        }, 50); // 50ms batch timeout for speed
+                // Store chunk with iOS memory management
+                if (this.isIOS && this.memoryOptimization) {
+                    // For iOS, immediately acknowledge and don't keep all chunks in memory
+                    this.sendData({
+                        type: 'chunk-ack',
+                        fileId: data.fileId,
+                        chunkIndex: data.chunkIndex
+                    });
+                    
+                    // Store chunk temporarily
+                    fileState.chunks[data.chunkIndex] = new Uint8Array(data.data);
+                    fileState.receivedChunks.add(data.chunkIndex);
+                    
+                    this.updateReceiveProgress(data.fileId);
+                    
+                    // Check if complete and assemble immediately
+                    if (fileState.receivedChunks.size === fileState.totalChunks) {
+                        setTimeout(() => this.assembleFileLocal(data.fileId), 100);
                     }
-                }
-                
-                this.updateReceiveProgress(data.fileId);
-                
-                // Check if file is complete
-                if (fileState.receivedChunks.size === fileState.totalChunks) {
-                    this.assembleReceivedFile(data.fileId);
-                }
-            }
-            
-            sendBatchAck(fileId) {
-                const fileState = this.receivingFiles.get(fileId);
-                if (!fileState || !fileState.pendingAcks || fileState.pendingAcks.length === 0) return;
-                
-                // Send batch acknowledgment for speed
-                this.sendReliableData({
-                    type: 'batch-ack',
-                    fileId: fileId,
-                    chunkIndexes: fileState.pendingAcks.slice() // Copy array
-                });
-                
-                // Clear pending ACKs
-                fileState.pendingAcks = [];
-                if (fileState.ackTimer) {
-                    clearTimeout(fileState.ackTimer);
-                    fileState.ackTimer = null;
+                } else {
+                    // Standard handling for non-iOS
+                    fileState.chunks[data.chunkIndex] = new Uint8Array(data.data);
+                    fileState.receivedChunks.add(data.chunkIndex);
+                    
+                    this.sendData({
+                        type: 'chunk-ack',
+                        fileId: data.fileId,
+                        chunkIndex: data.chunkIndex
+                    });
+                    
+                    this.updateReceiveProgress(data.fileId);
+                    
+                    if (fileState.receivedChunks.size === fileState.totalChunks) {
+                        this.assembleFileLocal(data.fileId);
+                    }
                 }
             }
             
@@ -796,54 +779,35 @@
                 
                 fileState.ackedChunks.add(data.chunkIndex);
                 fileState.inFlight.delete(data.chunkIndex);
-                this.log(`Chunk ${data.chunkIndex} acknowledged`);
                 
                 this.updateSendProgress(data.fileId);
-                
-                // Continue parallel sending
-                this.startParallelSending(data.fileId);
+                this.streamFileLocal(data.fileId);
             }
             
-            handleBatchAck(data) {
-                const fileState = this.sendingFiles.get(data.fileId);
-                if (!fileState) return;
-                
-                // Process batch acknowledgments for speed
-                data.chunkIndexes.forEach(chunkIndex => {
-                    fileState.ackedChunks.add(chunkIndex);
-                    fileState.inFlight.delete(chunkIndex);
-                });
-                
-                this.log(`Batch ACK: ${data.chunkIndexes.length} chunks acknowledged`);
-                this.updateSendProgress(data.fileId);
-                
-                // Continue parallel sending
-                this.startParallelSending(data.fileId);
-            }
-            
-            completeSend(fileId) {
+            completeLocalSend(fileId) {
                 const fileState = this.sendingFiles.get(fileId);
                 if (!fileState) return;
                 
                 const duration = (Date.now() - fileState.startTime) / 1000;
-                this.log(`File sent successfully: ${fileState.file.name} in ${duration}s`);
+                const speed = (fileState.file.size / duration / 1024 / 1024).toFixed(1);
                 
-                // Update UI
+                this.log(`Local transfer complete: ${fileState.file.name} at ${speed} MB/s`);
+                
                 const fileDiv = document.getElementById(`sending-${fileId}`);
                 if (fileDiv) {
-                    fileDiv.querySelector('.progress-text').innerHTML = '<span>✅ Sent!</span>';
-                    fileDiv.querySelector('.reliability-indicator').textContent = '✅ High-speed reliable delivery confirmed';
+                    fileDiv.querySelector('.progress-text').innerHTML = `<span>✅ Sent at ${speed} MB/s!</span>`;
+                    fileDiv.querySelector('.local-network-indicator').textContent = `✅ Local network transfer complete - ${speed} MB/s`;
                 }
                 
                 this.sendingFiles.delete(fileId);
-                this.showMessage(`✅ ${fileState.file.name} sent successfully!`, 'success');
+                this.showMessage(`✅ ${fileState.file.name} sent at ${speed} MB/s!`, 'success');
             }
             
-            assembleReceivedFile(fileId) {
+            assembleFileLocal(fileId) {
                 const fileState = this.receivingFiles.get(fileId);
                 if (!fileState) return;
                 
-                this.log(`Assembling file: ${fileState.name}`);
+                this.log(`Assembling local file: ${fileState.name}`);
                 
                 try {
                     // Calculate total size
@@ -868,7 +832,14 @@
                     fileState.blob = blob;
                     
                     const duration = (Date.now() - fileState.startTime) / 1000;
-                    this.log(`File assembled: ${fileState.name} in ${duration}s`);
+                    const speed = (fileState.size / duration / 1024 / 1024).toFixed(1);
+                    
+                    this.log(`Local file assembled: ${fileState.name} at ${speed} MB/s`);
+                    
+                    // Clear chunks from memory immediately for iOS
+                    if (this.isIOS) {
+                        fileState.chunks = null;
+                    }
                     
                     // Update UI
                     const fileDiv = document.getElementById(`receiving-${fileId}`);
@@ -876,13 +847,13 @@
                     fileDiv.innerHTML = `
                         <div class="file-name">✅ ${fileState.name}</div>
                         <div class="file-size">${this.formatFileSize(blob.size)}</div>
-                        <div class="reliability-indicator">✅ High-speed reliable transfer complete</div>
+                        <div class="local-network-indicator">✅ Local network transfer complete - ${speed} MB/s</div>
                         <button class="btn btn-download" onclick="app.downloadFile('${fileId}')">
                             💾 Download File
                         </button>
                     `;
                     
-                    this.showMessage(`✅ ${fileState.name} ready to download!`, 'success');
+                    this.showMessage(`✅ ${fileState.name} ready at ${speed} MB/s!`, 'success');
                     
                 } catch (error) {
                     this.log(`Assembly error: ${error}`);
@@ -898,7 +869,7 @@
                 fileDiv.innerHTML = `
                     <div class="file-name">${fileState.file.name}</div>
                     <div class="file-size">${this.formatFileSize(fileState.file.size)}</div>
-                    <div class="reliability-indicator">⚡ High-speed parallel transfer (${this.windowSize} chunks)</div>
+                    <div class="local-network-indicator">🏠 Local network transfer with ${this.chunkSize/1024}KB chunks</div>
                     <div class="progress-container">
                         <div class="progress-bar">
                             <div class="progress-fill" id="send-progress-${fileState.fileId}"></div>
@@ -906,8 +877,8 @@
                         <div class="progress-text" id="send-text-${fileState.fileId}">
                             <span>Starting...</span>
                         </div>
-                        <div class="chunk-info" id="send-chunks-${fileState.fileId}">
-                            0/${fileState.totalChunks} chunks confirmed
+                        <div class="speed-info" id="send-speed-${fileState.fileId}">
+                            0/${fileState.totalChunks} chunks sent
                         </div>
                     </div>
                 `;
@@ -922,7 +893,7 @@
                 fileDiv.innerHTML = `
                     <div class="file-name">📥 ${fileState.name}</div>
                     <div class="file-size">${this.formatFileSize(fileState.size)}</div>
-                    <div class="reliability-indicator">⚡ High-speed receiving with batch ACKs</div>
+                    <div class="local-network-indicator">🏠 Receiving via local network</div>
                     <div class="progress-container">
                         <div class="progress-bar">
                             <div class="progress-fill" id="receive-progress-${fileState.fileId}"></div>
@@ -930,14 +901,14 @@
                         <div class="progress-text" id="receive-text-${fileState.fileId}">
                             <span>Receiving...</span>
                         </div>
-                        <div class="chunk-info" id="receive-chunks-${fileState.fileId}">
+                        <div class="speed-info" id="receive-speed-${fileState.fileId}">
                             0/${fileState.totalChunks} chunks received
                         </div>
                     </div>
                 `;
                 container.appendChild(fileDiv);
                 
-                this.showMessage(`📥 Receiving ${fileState.name}...`, 'info');
+                this.showMessage(`📥 Receiving ${fileState.name} via local network...`, 'info');
             }
             
             updateSendProgress(fileId) {
@@ -947,29 +918,11 @@
                 const progress = (fileState.ackedChunks.size / fileState.totalChunks) * 100;
                 const progressBar = document.getElementById(`send-progress-${fileId}`);
                 const progressText = document.getElementById(`send-text-${fileId}`);
-                const chunkInfo = document.getElementById(`send-chunks-${fileId}`);
-                
-                // Calculate speed
-                const now = Date.now();
-                const timeDiff = (now - fileState.lastProgressTime) / 1000;
-                const chunkDiff = fileState.ackedChunks.size - fileState.lastProgressChunks;
-                
-                if (timeDiff > 1) { // Update speed every second
-                    const chunkSpeed = chunkDiff / timeDiff;
-                    const bytesPerSecond = chunkSpeed * this.chunkSize;
-                    const mbps = (bytesPerSecond / 1024 / 1024).toFixed(1);
-                    
-                    fileState.lastProgressTime = now;
-                    fileState.lastProgressChunks = fileState.ackedChunks.size;
-                    fileState.currentSpeed = mbps;
-                }
+                const speedInfo = document.getElementById(`send-speed-${fileId}`);
                 
                 if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) {
-                    const speedText = fileState.currentSpeed ? ` - ${fileState.currentSpeed} MB/s` : '';
-                    progressText.innerHTML = `<span>${Math.round(progress)}%${speedText}</span>`;
-                }
-                if (chunkInfo) chunkInfo.textContent = `${fileState.ackedChunks.size}/${fileState.totalChunks} chunks confirmed`;
+                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
+                if (speedInfo) speedInfo.textContent = `${fileState.ackedChunks.size}/${fileState.totalChunks} chunks confirmed`;
             }
             
             updateReceiveProgress(fileId) {
@@ -979,29 +932,11 @@
                 const progress = (fileState.receivedChunks.size / fileState.totalChunks) * 100;
                 const progressBar = document.getElementById(`receive-progress-${fileId}`);
                 const progressText = document.getElementById(`receive-text-${fileId}`);
-                const chunkInfo = document.getElementById(`receive-chunks-${fileId}`);
-                
-                // Calculate receive speed
-                const now = Date.now();
-                const timeDiff = (now - fileState.lastProgressTime) / 1000;
-                const chunkDiff = fileState.receivedChunks.size - fileState.lastProgressChunks;
-                
-                if (timeDiff > 1) { // Update speed every second
-                    const chunkSpeed = chunkDiff / timeDiff;
-                    const bytesPerSecond = chunkSpeed * fileState.chunkSize;
-                    const mbps = (bytesPerSecond / 1024 / 1024).toFixed(1);
-                    
-                    fileState.lastProgressTime = now;
-                    fileState.lastProgressChunks = fileState.receivedChunks.size;
-                    fileState.currentSpeed = mbps;
-                }
+                const speedInfo = document.getElementById(`receive-speed-${fileId}`);
                 
                 if (progressBar) progressBar.style.width = `${progress}%`;
-                if (progressText) {
-                    const speedText = fileState.currentSpeed ? ` - ${fileState.currentSpeed} MB/s` : '';
-                    progressText.innerHTML = `<span>${Math.round(progress)}%${speedText}</span>`;
-                }
-                if (chunkInfo) chunkInfo.textContent = `${fileState.receivedChunks.size}/${fileState.totalChunks} chunks received`;
+                if (progressText) progressText.innerHTML = `<span>${Math.round(progress)}%</span>`;
+                if (speedInfo) speedInfo.textContent = `${fileState.receivedChunks.size}/${fileState.totalChunks} chunks received`;
             }
             
             downloadFile(fileId) {
@@ -1012,9 +947,7 @@
                 }
                 
                 try {
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                    
-                    if (isIOS && navigator.share) {
+                    if (this.isIOS && navigator.share) {
                         const file = new File([fileState.blob], fileState.name);
                         navigator.share({
                             files: [file],
@@ -1064,8 +997,7 @@
                 this.connection = null;
                 this.isConnected = false;
                 this.connectionCode = '';
-                this.sendingFiles.clear();
-                this.receivingFiles.clear();
+                this.cleanupMemory();
                 
                 this.updateStatus('Ready to start', '');
                 document.getElementById('code-section').classList.add('hidden');
@@ -1102,7 +1034,7 @@
         }
         
         // Initialize app
-        const app = new ReliableFileTransfer();
+        const app = new LocalNetworkTransfer();
         
         // Global functions
         function startHost() {
