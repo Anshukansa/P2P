@@ -231,17 +231,28 @@
         </div>
     </div>
 
-
+    <!-- Load PeerJS first -->
+    <script src="https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js"></script>
+    
+    <script>
+        class P2PMessaging {
+            constructor() {
+                this.peer = null;
+                this.connection = null;
+                this.isHost = false;
+                this.messages = [];
+                this.peerReady = false;
+                this.init();
             }
             
             async init() {
-                // Using PeerJS for WebRTC signaling
-                const script = document.createElement('script');
-                script.src = 'https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js';
-                script.onload = () => {
-                    console.log('PeerJS loaded');
-                };
-                document.head.appendChild(script);
+                // Wait for PeerJS to load
+                if (typeof Peer === 'undefined') {
+                    setTimeout(() => this.init(), 100);
+                    return;
+                }
+                this.peerReady = true;
+                console.log('PeerJS is ready');
             }
             
             generateId() {
