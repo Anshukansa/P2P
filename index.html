@@ -1,431 +1,584 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P File Transfer - Local Network</title>
+    <title>High-Speed File Transfer</title>
 </head>
 <body>
-    <h1>P2P File Transfer - Local Network</h1>
+    <h1>High-Speed Local Network File Transfer</h1>
     
-    <div id="device-info">
-        <h2>Your Device</h2>
-        <div>Device ID: <strong id="my-device-id"></strong></div>
-        <div>Status: <span id="my-status">Starting...</span></div>
+    <div id="setup">
+        <h2>Connection Setup</h2>
+        <input type="text" id="deviceName" placeholder="Enter your device name" value="">
+        <br><br>
+        <button onclick="createRoom()">Create Room</button>
+        <button onclick="joinRoom()">Join Room</button>
+        <br><br>
+        <input type="text" id="roomCode" placeholder="Enter room code to join">
     </div>
 
-    <div id="available-devices">
-        <h2>Available Devices</h2>
-        <div id="device-list">Scanning for devices...</div>
-        <button onclick="refreshDevices()">Refresh Devices</button>
+    <div id="roomInfo" style="display:none;">
+        <h2>Room Information</h2>
+        <p>Room Code: <strong id="currentRoomCode"></strong></p>
+        <p>Your Device: <strong id="yourDeviceName"></strong></p>
+        <button onclick="copyRoomCode()">Copy Room Code</button>
+        <button onclick="leaveRoom()">Leave Room</button>
     </div>
 
-    <div id="connection-status" style="display: none;">
-        <h2>Connection Status</h2>
-        <div id="connection-info"></div>
+    <div id="devices">
+        <h2>Connected Devices</h2>
+        <div id="deviceList"></div>
     </div>
 
-    <div id="file-transfer" style="display: none;">
-        <h2>Send Files</h2>
-        <input type="file" id="file-input" multiple>
-        <button onclick="sendFiles()">Send Selected Files</button>
-        
-        <div id="transfer-progress"></div>
-        <div id="speed-info"></div>
+    <div id="fileTransfer">
+        <h2>File Transfer</h2>
+        <input type="file" id="fileInput" multiple>
+        <div id="selectedDevice">Select a device from above to send files</div>
+        <br><br>
+        <div id="transferStatus"></div>
+        <div id="transferProgress"></div>
     </div>
 
-    <div id="received-files">
+    <div id="downloads">
         <h2>Received Files</h2>
-        <div id="file-list"></div>
+        <div id="downloadList"></div>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
-        let peer = null;
-        let connections = new Map();
-        let myDeviceId = null;
-        let transferStartTime = 0;
-        let totalBytes = 0;
-        let isTransferring = false;
+        const CHUNK_SIZE = 16384; // 16KB chunks for optimal WebRTC performance
+        let localPeer = null;
+        let dataChannel = null;
+        let peers = new Map();
+        let currentRoom = null;
+        let deviceName = '';
+        let selectedPeerId = null;
+        let receivedFiles = new Map();
+        let transferStats = {
+            startTime: 0,
+            bytesTransferred: 0,
+            totalBytes: 0
+        };
 
-        const CHUNK_SIZE = 16384; // 16KB chunks
-        const DISCOVERY_KEY = 'p2p_devices';
-        const DEVICE_TIMEOUT = 30000; // 30 seconds
+        // WebRTC configuration with public STUN servers
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
 
-        // Initialize
-        function init() {
-            myDeviceId = generateDeviceId();
-            document.getElementById('my-device-id').textContent = myDeviceId;
-            
-            // Initialize PeerJS
-            peer = new Peer(myDeviceId, {
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
-
-            peer.on('open', function(id) {
-                console.log('Peer opened with ID:', id);
-                document.getElementById('my-status').textContent = 'Online';
-                announceDevice();
-                startDeviceDiscovery();
-            });
-
-            peer.on('connection', function(conn) {
-                console.log('Incoming connection from:', conn.peer);
-                setupConnection(conn);
-                updateConnectionStatus();
-            });
-
-            peer.on('error', function(err) {
-                console.error('Peer error:', err);
-                document.getElementById('my-status').textContent = 'Error: ' + err.message;
-            });
-
-            // Start periodic device announcement
-            setInterval(announceDevice, 5000);
-            
-            // Start periodic device discovery
-            setInterval(discoverDevices, 3000);
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
         }
 
-        function generateDeviceId() {
-            const adjectives = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan'];
-            const nouns = ['Phone', 'Laptop', 'Tablet', 'Desktop', 'Device', 'Computer', 'Mobile', 'PC'];
-            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-            const noun = nouns[Math.floor(Math.random() * nouns.length)];
-            const num = Math.floor(Math.random() * 999);
-            return `${adj}${noun}${num}`;
+        function setDeviceName() {
+            deviceName = document.getElementById('deviceName').value.trim();
+            if (!deviceName) {
+                deviceName = 'Device-' + Math.random().toString(36).substring(2, 6);
+                document.getElementById('deviceName').value = deviceName;
+            }
         }
 
-        function announceDevice() {
-            if (!peer || !peer.id) return;
+        async function createRoom() {
+            setDeviceName();
+            currentRoom = generateRoomCode();
+            document.getElementById('currentRoomCode').textContent = currentRoom;
+            document.getElementById('yourDeviceName').textContent = deviceName;
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('roomInfo').style.display = 'block';
             
-            const devices = getStoredDevices();
-            devices[myDeviceId] = {
-                id: myDeviceId,
-                timestamp: Date.now(),
-                userAgent: navigator.userAgent.substring(0, 50)
+            // Store room info in localStorage for other tabs to discover
+            const roomData = {
+                code: currentRoom,
+                creator: deviceName,
+                timestamp: Date.now()
             };
+            localStorage.setItem('room_' + currentRoom, JSON.stringify(roomData));
             
-            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
+            // Listen for connection requests
+            window.addEventListener('storage', handleStorageChange);
+            
+            updateDeviceList();
         }
 
-        function getStoredDevices() {
-            try {
-                const stored = localStorage.getItem(DISCOVERY_KEY);
-                return stored ? JSON.parse(stored) : {};
-            } catch (e) {
-                return {};
-            }
-        }
-
-        function cleanupOldDevices(devices) {
-            const now = Date.now();
-            const cleaned = {};
-            
-            for (const [id, device] of Object.entries(devices)) {
-                if (now - device.timestamp < DEVICE_TIMEOUT) {
-                    cleaned[id] = device;
+        function handleStorageChange(e) {
+            if (e.key && e.key.startsWith('join_request_' + currentRoom)) {
+                const requestData = JSON.parse(e.newValue);
+                if (requestData && requestData.deviceName && requestData.offer) {
+                    handleJoinRequest(requestData);
                 }
             }
-            
-            return cleaned;
         }
 
-        function discoverDevices() {
-            const devices = cleanupOldDevices(getStoredDevices());
-            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
+        async function handleJoinRequest(requestData) {
+            const peer = new RTCPeerConnection(rtcConfig);
+            const peerId = 'peer_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
             
-            const deviceListDiv = document.getElementById('device-list');
-            const availableDevices = Object.values(devices).filter(d => d.id !== myDeviceId);
-            
-            if (availableDevices.length === 0) {
-                deviceListDiv.innerHTML = 'No other devices found. Make sure other devices have this page open.';
+            peer.ondatachannel = (event) => {
+                const channel = event.channel;
+                setupDataChannelHandlers(channel, peerId, requestData.deviceName);
+            };
+
+            peer.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const responseKey = 'join_response_' + currentRoom + '_' + requestData.requestId;
+                    const existingResponse = localStorage.getItem(responseKey);
+                    let responseData;
+                    
+                    if (existingResponse) {
+                        responseData = JSON.parse(existingResponse);
+                        responseData.candidates = responseData.candidates || [];
+                        responseData.candidates.push(event.candidate);
+                    } else {
+                        responseData = {
+                            candidates: [event.candidate]
+                        };
+                    }
+                    localStorage.setItem(responseKey, JSON.stringify(responseData));
+                }
+            };
+
+            await peer.setRemoteDescription(new RTCSessionDescription(requestData.offer));
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+
+            // Add ICE candidates
+            if (requestData.candidates) {
+                for (const candidate of requestData.candidates) {
+                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            }
+
+            // Store the answer
+            const responseKey = 'join_response_' + currentRoom + '_' + requestData.requestId;
+            const responseData = {
+                answer: answer,
+                deviceName: deviceName,
+                candidates: []
+            };
+            localStorage.setItem(responseKey, JSON.stringify(responseData));
+
+            peers.set(peerId, {
+                connection: peer,
+                deviceName: requestData.deviceName,
+                dataChannel: null
+            });
+
+            updateDeviceList();
+        }
+
+        async function joinRoom() {
+            setDeviceName();
+            const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
+            if (!roomCode) {
+                alert('Please enter a room code');
                 return;
             }
 
-            let html = '';
-            availableDevices.forEach(device => {
-                const isConnected = connections.has(device.id);
-                const status = isConnected ? '✅ Connected' : '🔵 Available';
-                const action = isConnected ? 'Connected' : `<button onclick="connectToDevice('${device.id}')">Connect</button>`;
-                
-                html += `
-                    <div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
-                        <strong>${device.id}</strong> ${status}<br>
-                        <small>${device.userAgent}</small><br>
-                        ${action}
-                    </div>
+            const roomData = localStorage.getItem('room_' + roomCode);
+            if (!roomData) {
+                alert('Room not found');
+                return;
+            }
+
+            currentRoom = roomCode;
+            document.getElementById('currentRoomCode').textContent = currentRoom;
+            document.getElementById('yourDeviceName').textContent = deviceName;
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('roomInfo').style.display = 'block';
+
+            // Create connection to room creator
+            await connectToPeer();
+            
+            updateDeviceList();
+        }
+
+        async function connectToPeer() {
+            const peer = new RTCPeerConnection(rtcConfig);
+            const dataChannel = peer.createDataChannel('fileTransfer');
+            const peerId = 'creator';
+            const requestId = Date.now().toString();
+
+            peer.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const requestKey = 'join_request_' + currentRoom;
+                    const existingRequest = localStorage.getItem(requestKey);
+                    let requestData;
+                    
+                    if (existingRequest) {
+                        requestData = JSON.parse(existingRequest);
+                        requestData.candidates = requestData.candidates || [];
+                        requestData.candidates.push(event.candidate);
+                    } else {
+                        requestData = {
+                            deviceName: deviceName,
+                            requestId: requestId,
+                            candidates: [event.candidate]
+                        };
+                    }
+                    localStorage.setItem(requestKey, JSON.stringify(requestData));
+                }
+            };
+
+            const offer = await peer.createOffer();
+            await peer.setLocalDescription(offer);
+
+            // Send join request
+            const requestData = {
+                deviceName: deviceName,
+                requestId: requestId,
+                offer: offer,
+                candidates: []
+            };
+            localStorage.setItem('join_request_' + currentRoom, JSON.stringify(requestData));
+
+            // Wait for response
+            const checkForResponse = () => {
+                const responseKey = 'join_response_' + currentRoom + '_' + requestId;
+                const responseData = localStorage.getItem(responseKey);
+                if (responseData) {
+                    const response = JSON.parse(responseData);
+                    handleJoinResponse(peer, response, peerId);
+                    return;
+                }
+                setTimeout(checkForResponse, 1000);
+            };
+            checkForResponse();
+
+            setupDataChannelHandlers(dataChannel, peerId, 'Room Creator');
+            
+            peers.set(peerId, {
+                connection: peer,
+                deviceName: 'Room Creator',
+                dataChannel: dataChannel
+            });
+        }
+
+        async function handleJoinResponse(peer, response, peerId) {
+            await peer.setRemoteDescription(new RTCSessionDescription(response.answer));
+            
+            if (response.candidates) {
+                for (const candidate of response.candidates) {
+                    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            }
+
+            const peerData = peers.get(peerId);
+            if (peerData) {
+                peerData.deviceName = response.deviceName;
+                peers.set(peerId, peerData);
+                updateDeviceList();
+            }
+        }
+
+        function setupDataChannelHandlers(channel, peerId, deviceName) {
+            channel.onopen = () => {
+                console.log('Data channel opened with', deviceName);
+                const peerData = peers.get(peerId);
+                if (peerData) {
+                    peerData.dataChannel = channel;
+                    peers.set(peerId, peerData);
+                }
+                updateDeviceList();
+            };
+
+            channel.onmessage = (event) => {
+                handleFileData(event.data, peerId);
+            };
+
+            channel.onerror = (error) => {
+                console.error('Data channel error:', error);
+            };
+
+            channel.onclose = () => {
+                console.log('Data channel closed with', deviceName);
+                updateDeviceList();
+            };
+        }
+
+        function updateDeviceList() {
+            const deviceList = document.getElementById('deviceList');
+            deviceList.innerHTML = '';
+
+            peers.forEach((peerData, peerId) => {
+                const deviceDiv = document.createElement('div');
+                const status = peerData.dataChannel && peerData.dataChannel.readyState === 'open' ? 'Connected' : 'Connecting...';
+                deviceDiv.innerHTML = `
+                    <p><strong>${peerData.deviceName}</strong> - ${status}</p>
+                    <button onclick="selectDevice('${peerId}')" ${status !== 'Connected' ? 'disabled' : ''}>Send Files</button>
                 `;
-            });
-            
-            deviceListDiv.innerHTML = html;
-        }
-
-        function startDeviceDiscovery() {
-            discoverDevices();
-            setInterval(discoverDevices, 2000);
-        }
-
-        function refreshDevices() {
-            discoverDevices();
-        }
-
-        function connectToDevice(deviceId) {
-            if (connections.has(deviceId)) return;
-            
-            console.log('Connecting to:', deviceId);
-            const conn = peer.connect(deviceId, {
-                reliable: true
-            });
-            
-            setupConnection(conn);
-        }
-
-        function setupConnection(conn) {
-            connections.set(conn.peer, conn);
-            
-            conn.on('open', function() {
-                console.log('Connection opened with:', conn.peer);
-                updateConnectionStatus();
-                showFileTransfer();
+                deviceList.appendChild(deviceDiv);
             });
 
-            conn.on('data', function(data) {
-                handleIncomingData(data, conn.peer);
-            });
-
-            conn.on('close', function() {
-                console.log('Connection closed with:', conn.peer);
-                connections.delete(conn.peer);
-                updateConnectionStatus();
-            });
-
-            conn.on('error', function(err) {
-                console.error('Connection error:', err);
-                connections.delete(conn.peer);
-                updateConnectionStatus();
-            });
-        }
-
-        function updateConnectionStatus() {
-            const connectedDevices = Array.from(connections.keys());
-            const statusDiv = document.getElementById('connection-status');
-            const infoDiv = document.getElementById('connection-info');
-            
-            if (connectedDevices.length > 0) {
-                statusDiv.style.display = 'block';
-                infoDiv.innerHTML = `Connected to: ${connectedDevices.join(', ')}`;
-            } else {
-                statusDiv.style.display = 'none';
+            if (peers.size === 0) {
+                deviceList.innerHTML = '<p>No devices connected</p>';
             }
         }
 
-        function showFileTransfer() {
-            document.getElementById('file-transfer').style.display = 'block';
+        function selectDevice(peerId) {
+            selectedPeerId = peerId;
+            const peerData = peers.get(peerId);
+            document.getElementById('selectedDevice').textContent = `Selected: ${peerData.deviceName}`;
+            document.getElementById('fileInput').style.display = 'block';
         }
 
-        function sendFiles() {
-            const fileInput = document.getElementById('file-input');
-            const files = Array.from(fileInput.files);
-            
-            if (files.length === 0) {
-                alert('Please select files to send');
+        function copyRoomCode() {
+            navigator.clipboard.writeText(currentRoom).then(() => {
+                alert('Room code copied to clipboard!');
+            });
+        }
+
+        function leaveRoom() {
+            // Close all peer connections
+            peers.forEach((peerData) => {
+                if (peerData.dataChannel) {
+                    peerData.dataChannel.close();
+                }
+                peerData.connection.close();
+            });
+            peers.clear();
+
+            // Clean up localStorage
+            if (currentRoom) {
+                localStorage.removeItem('room_' + currentRoom);
+            }
+
+            // Reset UI
+            currentRoom = null;
+            selectedPeerId = null;
+            document.getElementById('setup').style.display = 'block';
+            document.getElementById('roomInfo').style.display = 'none';
+            document.getElementById('selectedDevice').textContent = 'Select a device from above to send files';
+            updateDeviceList();
+        }
+
+        document.getElementById('fileInput').addEventListener('change', async (event) => {
+            if (!selectedPeerId) {
+                alert('Please select a device first');
                 return;
             }
 
-            if (connections.size === 0) {
-                alert('No devices connected');
-                return;
-            }
-
-            isTransferring = true;
-            sendFilesToAllConnections(files);
-        }
-
-        async function sendFilesToAllConnections(files) {
+            const files = Array.from(event.target.files);
             for (const file of files) {
-                await sendFileToAllConnections(file);
+                await sendFile(file);
             }
-            isTransferring = false;
-            document.getElementById('transfer-progress').innerHTML += '<br><strong>All files sent!</strong>';
-        }
+        });
 
-        async function sendFileToAllConnections(file) {
-            const fileId = generateFileId();
-            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        async function sendFile(file) {
+            const peerData = peers.get(selectedPeerId);
+            if (!peerData || !peerData.dataChannel || peerData.dataChannel.readyState !== 'open') {
+                alert('Selected device is not connected');
+                return;
+            }
+
+            const channel = peerData.dataChannel;
             
-            // Send file info to all connections
+            // Reset transfer stats
+            transferStats.startTime = Date.now();
+            transferStats.bytesTransferred = 0;
+            transferStats.totalBytes = file.size;
+
+            // Send file metadata
             const fileInfo = {
-                type: 'file-start',
-                fileId: fileId,
+                type: 'file_start',
                 name: file.name,
                 size: file.size,
-                mimeType: file.type,
-                totalChunks: totalChunks
+                fileType: file.type,
+                checksum: await calculateChecksum(file)
             };
-
-            connections.forEach(conn => {
-                conn.send(fileInfo);
-            });
-
-            transferStartTime = Date.now();
-            totalBytes = 0;
-
-            document.getElementById('transfer-progress').innerHTML = 
-                `Sending: ${file.name} (${formatBytes(file.size)})<br>Progress: 0%`;
-
-            // Send file chunks
-            for (let i = 0; i < totalChunks; i++) {
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(start + CHUNK_SIZE, file.size);
-                const chunk = file.slice(start, end);
-                
-                const arrayBuffer = await chunk.arrayBuffer();
-                const chunkData = {
-                    type: 'file-chunk',
-                    fileId: fileId,
-                    chunkIndex: i,
-                    data: Array.from(new Uint8Array(arrayBuffer))
-                };
-
-                connections.forEach(conn => {
-                    conn.send(chunkData);
-                });
-
-                totalBytes += arrayBuffer.byteLength;
-                const progress = (totalBytes / file.size) * 100;
-                const speed = calculateSpeed(totalBytes, transferStartTime);
-
-                document.getElementById('transfer-progress').innerHTML = 
-                    `Sending: ${file.name} (${formatBytes(file.size)})<br>Progress: ${progress.toFixed(1)}%`;
-                document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
-
-                // Small delay to prevent overwhelming
-                await new Promise(resolve => setTimeout(resolve, 1));
-            }
-
-            // Send file end
-            connections.forEach(conn => {
-                conn.send({
-                    type: 'file-end',
-                    fileId: fileId
-                });
-            });
-        }
-
-        // File receiving logic
-        const receivingFiles = new Map();
-
-        function handleIncomingData(data, fromPeer) {
-            if (data.type === 'file-start') {
-                startReceivingFile(data, fromPeer);
-            } else if (data.type === 'file-chunk') {
-                receiveFileChunk(data, fromPeer);
-            } else if (data.type === 'file-end') {
-                finishReceivingFile(data, fromPeer);
-            }
-        }
-
-        function startReceivingFile(fileInfo, fromPeer) {
-            receivingFiles.set(fileInfo.fileId, {
-                ...fileInfo,
-                chunks: new Array(fileInfo.totalChunks),
-                receivedChunks: 0,
-                fromPeer: fromPeer,
-                startTime: Date.now(),
-                totalBytesReceived: 0
-            });
-
-            document.getElementById('transfer-progress').innerHTML = 
-                `Receiving: ${fileInfo.name} from ${fromPeer}<br>Progress: 0%`;
-        }
-
-        function receiveFileChunk(chunkData, fromPeer) {
-            const fileInfo = receivingFiles.get(chunkData.fileId);
-            if (!fileInfo) return;
-
-            fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
-            fileInfo.receivedChunks++;
-            fileInfo.totalBytesReceived += chunkData.data.length;
-
-            const progress = (fileInfo.receivedChunks / fileInfo.totalChunks) * 100;
-            const speed = calculateSpeed(fileInfo.totalBytesReceived, fileInfo.startTime);
-
-            document.getElementById('transfer-progress').innerHTML = 
-                `Receiving: ${fileInfo.name} from ${fromPeer}<br>Progress: ${progress.toFixed(1)}%`;
-            document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
-        }
-
-        function finishReceivingFile(endData, fromPeer) {
-            const fileInfo = receivingFiles.get(endData.fileId);
-            if (!fileInfo) return;
-
-            // Combine all chunks
-            const totalSize = fileInfo.chunks.reduce((sum, chunk) => sum + (chunk ? chunk.length : 0), 0);
-            const fileData = new Uint8Array(totalSize);
+            
+            channel.send(JSON.stringify(fileInfo));
+            
+            document.getElementById('transferStatus').innerHTML = `Sending: ${file.name} (${formatBytes(file.size)})`;
+            
+            // Send file in chunks
+            const reader = new FileReader();
             let offset = 0;
 
-            for (const chunk of fileInfo.chunks) {
-                if (chunk) {
-                    fileData.set(chunk, offset);
-                    offset += chunk.length;
+            const sendNextChunk = () => {
+                if (offset >= file.size) {
+                    // File transfer complete
+                    channel.send(JSON.stringify({type: 'file_end'}));
+                    const duration = (Date.now() - transferStats.startTime) / 1000;
+                    const speed = transferStats.bytesTransferred / duration / 1024 / 1024; // MB/s
+                    document.getElementById('transferStatus').innerHTML = `Sent: ${file.name} - ${speed.toFixed(2)} MB/s`;
+                    document.getElementById('transferProgress').innerHTML = '';
+                    return;
                 }
+
+                const chunk = file.slice(offset, offset + CHUNK_SIZE);
+                reader.onload = (e) => {
+                    const chunkData = {
+                        type: 'file_chunk',
+                        data: Array.from(new Uint8Array(e.target.result))
+                    };
+                    channel.send(JSON.stringify(chunkData));
+                    
+                    offset += CHUNK_SIZE;
+                    transferStats.bytesTransferred = offset;
+                    
+                    // Update progress
+                    const progress = (offset / file.size) * 100;
+                    const duration = (Date.now() - transferStats.startTime) / 1000;
+                    const speed = transferStats.bytesTransferred / duration / 1024 / 1024; // MB/s
+                    
+                    document.getElementById('transferProgress').innerHTML = 
+                        `Progress: ${progress.toFixed(1)}% - Speed: ${speed.toFixed(2)} MB/s`;
+                    
+                    // Continue with next chunk
+                    setTimeout(sendNextChunk, 1);
+                };
+                reader.readAsArrayBuffer(chunk);
+            };
+
+            sendNextChunk();
+        }
+
+        let currentReceivingFile = null;
+
+        function handleFileData(data, peerId) {
+            try {
+                const message = JSON.parse(data);
+                
+                if (message.type === 'file_start') {
+                    currentReceivingFile = {
+                        name: message.name,
+                        size: message.size,
+                        fileType: message.fileType,
+                        checksum: message.checksum,
+                        chunks: [],
+                        receivedBytes: 0,
+                        startTime: Date.now()
+                    };
+                    
+                    const peerData = peers.get(peerId);
+                    document.getElementById('transferStatus').innerHTML = 
+                        `Receiving: ${message.name} (${formatBytes(message.size)}) from ${peerData.deviceName}`;
+                        
+                } else if (message.type === 'file_chunk' && currentReceivingFile) {
+                    const chunkArray = new Uint8Array(message.data);
+                    currentReceivingFile.chunks.push(chunkArray);
+                    currentReceivingFile.receivedBytes += chunkArray.length;
+                    
+                    // Update progress
+                    const progress = (currentReceivingFile.receivedBytes / currentReceivingFile.size) * 100;
+                    const duration = (Date.now() - currentReceivingFile.startTime) / 1000;
+                    const speed = currentReceivingFile.receivedBytes / duration / 1024 / 1024; // MB/s
+                    
+                    document.getElementById('transferProgress').innerHTML = 
+                        `Progress: ${progress.toFixed(1)}% - Speed: ${speed.toFixed(2)} MB/s`;
+                        
+                } else if (message.type === 'file_end' && currentReceivingFile) {
+                    // Combine all chunks
+                    const totalSize = currentReceivingFile.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                    const combinedArray = new Uint8Array(totalSize);
+                    let offset = 0;
+                    
+                    for (const chunk of currentReceivingFile.chunks) {
+                        combinedArray.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                    
+                    // Verify checksum
+                    const receivedBlob = new Blob([combinedArray], {type: currentReceivingFile.fileType});
+                    calculateChecksum(receivedBlob).then(checksum => {
+                        if (checksum === currentReceivingFile.checksum) {
+                            // File received successfully
+                            const fileId = 'file_' + Date.now();
+                            receivedFiles.set(fileId, {
+                                name: currentReceivingFile.name,
+                                blob: receivedBlob,
+                                size: currentReceivingFile.size
+                            });
+                            
+                            const duration = (Date.now() - currentReceivingFile.startTime) / 1000;
+                            const speed = currentReceivingFile.receivedBytes / duration / 1024 / 1024; // MB/s
+                            
+                            document.getElementById('transferStatus').innerHTML = 
+                                `Received: ${currentReceivingFile.name} - ${speed.toFixed(2)} MB/s - File intact`;
+                            document.getElementById('transferProgress').innerHTML = '';
+                            
+                            addDownloadOption(fileId, currentReceivingFile.name, currentReceivingFile.size);
+                        } else {
+                            document.getElementById('transferStatus').innerHTML = 
+                                `Error: ${currentReceivingFile.name} - File corrupted during transfer`;
+                        }
+                        currentReceivingFile = null;
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling file data:', error);
             }
+        }
 
-            const blob = new Blob([fileData], { type: fileInfo.mimeType });
-            const url = URL.createObjectURL(blob);
-
-            // Add to received files list
-            const fileListDiv = document.getElementById('file-list');
-            const fileDiv = document.createElement('div');
-            fileDiv.style.border = '1px solid #ccc';
-            fileDiv.style.padding = '10px';
-            fileDiv.style.margin = '5px';
-            fileDiv.innerHTML = `
-                <strong>${fileInfo.name}</strong> (${formatBytes(fileInfo.size)})<br>
-                From: ${fromPeer}<br>
-                <a href="${url}" download="${fileInfo.name}">📥 Download</a>
+        function addDownloadOption(fileId, fileName, fileSize) {
+            const downloadList = document.getElementById('downloadList');
+            const downloadDiv = document.createElement('div');
+            downloadDiv.innerHTML = `
+                <p><strong>${fileName}</strong> (${formatBytes(fileSize)})</p>
+                <button onclick="downloadFile('${fileId}')">Download</button>
+                <button onclick="removeFile('${fileId}', this.parentElement)">Remove</button>
             `;
-            fileListDiv.appendChild(fileDiv);
-
-            receivingFiles.delete(endData.fileId);
-            
-            document.getElementById('transfer-progress').innerHTML += 
-                `<br><strong>${fileInfo.name} received successfully!</strong>`;
+            downloadList.appendChild(downloadDiv);
         }
 
-        function generateFileId() {
-            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        function downloadFile(fileId) {
+            const fileData = receivedFiles.get(fileId);
+            if (fileData) {
+                const url = URL.createObjectURL(fileData.blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileData.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
         }
 
-        function calculateSpeed(bytes, startTime) {
-            const elapsed = (Date.now() - startTime) / 1000;
-            const speed = bytes / elapsed;
-            return formatBytes(speed) + '/s';
+        function removeFile(fileId, element) {
+            receivedFiles.delete(fileId);
+            element.remove();
+        }
+
+        async function calculateChecksum(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (bytes === 0) return '0 Bytes';
             const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            const devices = getStoredDevices();
-            delete devices[myDeviceId];
-            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
+        // Auto-generate device name on load
+        window.onload = () => {
+            const savedName = localStorage.getItem('deviceName');
+            if (savedName) {
+                document.getElementById('deviceName').value = savedName;
+            } else {
+                const defaultName = 'Device-' + Math.random().toString(36).substring(2, 6);
+                document.getElementById('deviceName').value = defaultName;
+            }
+        };
+
+        // Save device name
+        document.getElementById('deviceName').addEventListener('change', (e) => {
+            localStorage.setItem('deviceName', e.target.value);
         });
 
-        // Start the application
-        init();
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentRoom) {
+                localStorage.removeItem('room_' + currentRoom);
+            }
+        });
     </script>
 </body>
 </html>
