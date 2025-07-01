@@ -6,228 +6,230 @@
     <title>P2P File Transfer - Local Network</title>
 </head>
 <body>
-    <h1>P2P File Transfer - Local Network Only</h1>
+    <h1>P2P File Transfer - Local Network</h1>
     
-    <div id="connection-section">
-        <h2>Connection</h2>
-        <button onclick="createRoom()">Create Room</button>
-        <br><br>
-        <input type="text" id="room-code" placeholder="Enter room code">
-        <button onclick="joinRoom()">Join Room</button>
-        <br><br>
-        <div id="room-info"></div>
-        <div id="connection-status">Disconnected</div>
+    <div id="device-info">
+        <h2>Your Device</h2>
+        <div>Device ID: <strong id="my-device-id"></strong></div>
+        <div>Status: <span id="my-status">Starting...</span></div>
     </div>
 
-    <div id="transfer-section" style="display: none;">
-        <h2>File Transfer</h2>
+    <div id="available-devices">
+        <h2>Available Devices</h2>
+        <div id="device-list">Scanning for devices...</div>
+        <button onclick="refreshDevices()">Refresh Devices</button>
+    </div>
+
+    <div id="connection-status" style="display: none;">
+        <h2>Connection Status</h2>
+        <div id="connection-info"></div>
+    </div>
+
+    <div id="file-transfer" style="display: none;">
+        <h2>Send Files</h2>
         <input type="file" id="file-input" multiple>
         <button onclick="sendFiles()">Send Selected Files</button>
-        <br><br>
         
         <div id="transfer-progress"></div>
         <div id="speed-info"></div>
-        <br>
-        
-        <h3>Received Files</h3>
-        <div id="received-files"></div>
     </div>
 
+    <div id="received-files">
+        <h2>Received Files</h2>
+        <div id="file-list"></div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
-        let localConnection = null;
-        let remoteConnection = null;
-        let dataChannel = null;
-        let currentRoomCode = null;
-        let isHost = false;
-        
-        // File transfer variables
-        let currentFile = null;
-        let currentFileIndex = 0;
-        let filesToSend = [];
-        let receivedChunks = [];
-        let expectedChunks = 0;
-        let receivedChunkCount = 0;
-        let fileMetadata = null;
+        let peer = null;
+        let connections = new Map();
+        let myDeviceId = null;
         let transferStartTime = 0;
-        let totalBytesReceived = 0;
-        let totalBytesSent = 0;
-        
-        const CHUNK_SIZE = 16384; // 16KB chunks for optimal speed
-        
-        // Generate random room code
-        function generateRoomCode() {
-            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        let totalBytes = 0;
+        let isTransferring = false;
+
+        const CHUNK_SIZE = 16384; // 16KB chunks
+        const DISCOVERY_KEY = 'p2p_devices';
+        const DEVICE_TIMEOUT = 30000; // 30 seconds
+
+        // Initialize
+        function init() {
+            myDeviceId = generateDeviceId();
+            document.getElementById('my-device-id').textContent = myDeviceId;
+            
+            // Initialize PeerJS
+            peer = new Peer(myDeviceId, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', function(id) {
+                console.log('Peer opened with ID:', id);
+                document.getElementById('my-status').textContent = 'Online';
+                announceDevice();
+                startDeviceDiscovery();
+            });
+
+            peer.on('connection', function(conn) {
+                console.log('Incoming connection from:', conn.peer);
+                setupConnection(conn);
+                updateConnectionStatus();
+            });
+
+            peer.on('error', function(err) {
+                console.error('Peer error:', err);
+                document.getElementById('my-status').textContent = 'Error: ' + err.message;
+            });
+
+            // Start periodic device announcement
+            setInterval(announceDevice, 5000);
+            
+            // Start periodic device discovery
+            setInterval(discoverDevices, 3000);
         }
-        
-        // Create room
-        async function createRoom() {
-            currentRoomCode = generateRoomCode();
-            isHost = true;
-            document.getElementById('room-info').innerHTML = `Room Code: <strong>${currentRoomCode}</strong><br>Share this code with the other device`;
-            await setupConnection(true);
+
+        function generateDeviceId() {
+            const adjectives = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan'];
+            const nouns = ['Phone', 'Laptop', 'Tablet', 'Desktop', 'Device', 'Computer', 'Mobile', 'PC'];
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const noun = nouns[Math.floor(Math.random() * nouns.length)];
+            const num = Math.floor(Math.random() * 999);
+            return `${adj}${noun}${num}`;
         }
-        
-        // Join room
-        async function joinRoom() {
-            const code = document.getElementById('room-code').value.trim().toUpperCase();
-            if (!code) {
-                alert('Please enter a room code');
+
+        function announceDevice() {
+            if (!peer || !peer.id) return;
+            
+            const devices = getStoredDevices();
+            devices[myDeviceId] = {
+                id: myDeviceId,
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent.substring(0, 50)
+            };
+            
+            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
+        }
+
+        function getStoredDevices() {
+            try {
+                const stored = localStorage.getItem(DISCOVERY_KEY);
+                return stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function cleanupOldDevices(devices) {
+            const now = Date.now();
+            const cleaned = {};
+            
+            for (const [id, device] of Object.entries(devices)) {
+                if (now - device.timestamp < DEVICE_TIMEOUT) {
+                    cleaned[id] = device;
+                }
+            }
+            
+            return cleaned;
+        }
+
+        function discoverDevices() {
+            const devices = cleanupOldDevices(getStoredDevices());
+            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
+            
+            const deviceListDiv = document.getElementById('device-list');
+            const availableDevices = Object.values(devices).filter(d => d.id !== myDeviceId);
+            
+            if (availableDevices.length === 0) {
+                deviceListDiv.innerHTML = 'No other devices found. Make sure other devices have this page open.';
                 return;
             }
-            currentRoomCode = code;
-            isHost = false;
-            document.getElementById('room-info').innerHTML = `Joining room: <strong>${currentRoomCode}</strong>`;
-            await setupConnection(false);
+
+            let html = '';
+            availableDevices.forEach(device => {
+                const isConnected = connections.has(device.id);
+                const status = isConnected ? '✅ Connected' : '🔵 Available';
+                const action = isConnected ? 'Connected' : `<button onclick="connectToDevice('${device.id}')">Connect</button>`;
+                
+                html += `
+                    <div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
+                        <strong>${device.id}</strong> ${status}<br>
+                        <small>${device.userAgent}</small><br>
+                        ${action}
+                    </div>
+                `;
+            });
+            
+            deviceListDiv.innerHTML = html;
         }
-        
-        // Setup WebRTC connection
-        async function setupConnection(isInitiator) {
-            const config = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' }
-                ]
-            };
+
+        function startDeviceDiscovery() {
+            discoverDevices();
+            setInterval(discoverDevices, 2000);
+        }
+
+        function refreshDevices() {
+            discoverDevices();
+        }
+
+        function connectToDevice(deviceId) {
+            if (connections.has(deviceId)) return;
             
-            localConnection = new RTCPeerConnection(config);
+            console.log('Connecting to:', deviceId);
+            const conn = peer.connect(deviceId, {
+                reliable: true
+            });
             
-            // Handle ICE candidates
-            localConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log('ICE candidate:', event.candidate);
-                    // In a real app, you'd send this through a signaling server
-                    // For local network, we'll simulate this
-                }
-            };
+            setupConnection(conn);
+        }
+
+        function setupConnection(conn) {
+            connections.set(conn.peer, conn);
             
-            localConnection.onconnectionstatechange = () => {
-                const state = localConnection.connectionState;
-                document.getElementById('connection-status').textContent = `Connection: ${state}`;
-                
-                if (state === 'connected') {
-                    document.getElementById('transfer-section').style.display = 'block';
-                    document.getElementById('connection-section').style.display = 'none';
-                }
-            };
+            conn.on('open', function() {
+                console.log('Connection opened with:', conn.peer);
+                updateConnectionStatus();
+                showFileTransfer();
+            });
+
+            conn.on('data', function(data) {
+                handleIncomingData(data, conn.peer);
+            });
+
+            conn.on('close', function() {
+                console.log('Connection closed with:', conn.peer);
+                connections.delete(conn.peer);
+                updateConnectionStatus();
+            });
+
+            conn.on('error', function(err) {
+                console.error('Connection error:', err);
+                connections.delete(conn.peer);
+                updateConnectionStatus();
+            });
+        }
+
+        function updateConnectionStatus() {
+            const connectedDevices = Array.from(connections.keys());
+            const statusDiv = document.getElementById('connection-status');
+            const infoDiv = document.getElementById('connection-info');
             
-            if (isInitiator) {
-                // Create data channel
-                dataChannel = localConnection.createDataChannel('fileTransfer', {
-                    ordered: true,
-                    maxRetransmits: 3
-                });
-                setupDataChannel(dataChannel);
-                
-                // Create offer
-                const offer = await localConnection.createOffer();
-                await localConnection.setLocalDescription(offer);
-                
-                // Simulate signaling for local network
-                setTimeout(() => simulateSignaling(offer, 'offer'), 1000);
+            if (connectedDevices.length > 0) {
+                statusDiv.style.display = 'block';
+                infoDiv.innerHTML = `Connected to: ${connectedDevices.join(', ')}`;
             } else {
-                // Handle incoming data channel
-                localConnection.ondatachannel = (event) => {
-                    dataChannel = event.channel;
-                    setupDataChannel(dataChannel);
-                };
-                
-                // Wait for offer (simulated)
-                setTimeout(() => waitForOffer(), 1000);
+                statusDiv.style.display = 'none';
             }
         }
-        
-        // Setup data channel handlers
-        function setupDataChannel(channel) {
-            channel.onopen = () => {
-                console.log('Data channel opened');
-                document.getElementById('connection-status').textContent = 'Connected - Ready to transfer files';
-            };
-            
-            channel.onclose = () => {
-                console.log('Data channel closed');
-                document.getElementById('connection-status').textContent = 'Disconnected';
-            };
-            
-            channel.onmessage = (event) => {
-                handleMessage(event.data);
-            };
-            
-            channel.onerror = (error) => {
-                console.error('Data channel error:', error);
-            };
+
+        function showFileTransfer() {
+            document.getElementById('file-transfer').style.display = 'block';
         }
-        
-        // Simulate signaling for local network demo
-        function simulateSignaling(data, type) {
-            // Store in localStorage to simulate signaling server
-            const signalData = {
-                roomCode: currentRoomCode,
-                type: type,
-                data: data,
-                timestamp: Date.now()
-            };
-            localStorage.setItem(`signal_${currentRoomCode}_${type}`, JSON.stringify(signalData));
-        }
-        
-        async function waitForOffer() {
-            const checkForOffer = async () => {
-                const signalData = localStorage.getItem(`signal_${currentRoomCode}_offer`);
-                if (signalData) {
-                    const parsed = JSON.parse(signalData);
-                    await localConnection.setRemoteDescription(parsed.data);
-                    
-                    const answer = await localConnection.createAnswer();
-                    await localConnection.setLocalDescription(answer);
-                    
-                    simulateSignaling(answer, 'answer');
-                    
-                    // Check for answer on the other side
-                    if (isHost) {
-                        checkForAnswer();
-                    }
-                } else {
-                    setTimeout(checkForOffer, 1000);
-                }
-            };
-            
-            const checkForAnswer = async () => {
-                const signalData = localStorage.getItem(`signal_${currentRoomCode}_answer`);
-                if (signalData) {
-                    const parsed = JSON.parse(signalData);
-                    await localConnection.setRemoteDescription(parsed.data);
-                } else {
-                    setTimeout(checkForAnswer, 1000);
-                }
-            };
-            
-            if (isHost) {
-                checkForAnswer();
-            } else {
-                checkForOffer();
-            }
-        }
-        
-        // Handle incoming messages
-        function handleMessage(data) {
-            try {
-                if (typeof data === 'string') {
-                    const message = JSON.parse(data);
-                    
-                    if (message.type === 'file-start') {
-                        startReceivingFile(message);
-                    } else if (message.type === 'file-end') {
-                        finishReceivingFile(message);
-                    }
-                } else {
-                    // Binary data (file chunk)
-                    receiveFileChunk(data);
-                }
-            } catch (error) {
-                console.error('Error handling message:', error);
-            }
-        }
-        
-        // Send files
-        async function sendFiles() {
+
+        function sendFiles() {
             const fileInput = document.getElementById('file-input');
             const files = Array.from(fileInput.files);
             
@@ -235,152 +237,195 @@
                 alert('Please select files to send');
                 return;
             }
-            
-            if (!dataChannel || dataChannel.readyState !== 'open') {
-                alert('Connection not ready');
+
+            if (connections.size === 0) {
+                alert('No devices connected');
                 return;
             }
-            
-            filesToSend = files;
-            currentFileIndex = 0;
-            sendNextFile();
+
+            isTransferring = true;
+            sendFilesToAllConnections(files);
         }
-        
-        async function sendNextFile() {
-            if (currentFileIndex >= filesToSend.length) {
-                document.getElementById('transfer-progress').innerHTML += '<br>All files sent successfully!';
-                return;
+
+        async function sendFilesToAllConnections(files) {
+            for (const file of files) {
+                await sendFileToAllConnections(file);
             }
+            isTransferring = false;
+            document.getElementById('transfer-progress').innerHTML += '<br><strong>All files sent!</strong>';
+        }
+
+        async function sendFileToAllConnections(file) {
+            const fileId = generateFileId();
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
             
-            currentFile = filesToSend[currentFileIndex];
-            const chunks = Math.ceil(currentFile.size / CHUNK_SIZE);
-            
-            // Send file metadata
-            const metadata = {
+            // Send file info to all connections
+            const fileInfo = {
                 type: 'file-start',
-                name: currentFile.name,
-                size: currentFile.size,
-                chunks: chunks,
-                mimeType: currentFile.type
+                fileId: fileId,
+                name: file.name,
+                size: file.size,
+                mimeType: file.type,
+                totalChunks: totalChunks
             };
-            
-            dataChannel.send(JSON.stringify(metadata));
-            
+
+            connections.forEach(conn => {
+                conn.send(fileInfo);
+            });
+
             transferStartTime = Date.now();
-            totalBytesSent = 0;
-            
+            totalBytes = 0;
+
             document.getElementById('transfer-progress').innerHTML = 
-                `Sending: ${currentFile.name} (${formatFileSize(currentFile.size)})<br>Progress: 0%`;
-            
-            // Send file in chunks
-            const reader = new FileReader();
-            let offset = 0;
-            
-            const sendChunk = () => {
-                const chunk = currentFile.slice(offset, offset + CHUNK_SIZE);
-                reader.readAsArrayBuffer(chunk);
-            };
-            
-            reader.onload = (event) => {
-                if (dataChannel.readyState === 'open') {
-                    dataChannel.send(event.target.result);
-                    totalBytesSent += event.target.result.byteLength;
-                    
-                    const progress = (totalBytesSent / currentFile.size) * 100;
-                    const speed = calculateSpeed(totalBytesSent, transferStartTime);
-                    
-                    document.getElementById('transfer-progress').innerHTML = 
-                        `Sending: ${currentFile.name} (${formatFileSize(currentFile.size)})<br>Progress: ${progress.toFixed(1)}%`;
-                    document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
-                    
-                    offset += CHUNK_SIZE;
-                    
-                    if (offset < currentFile.size) {
-                        setTimeout(sendChunk, 1); // Small delay to prevent overwhelming
-                    } else {
-                        // File sending complete
-                        dataChannel.send(JSON.stringify({
-                            type: 'file-end',
-                            name: currentFile.name,
-                            checksum: 'placeholder' // In real app, calculate actual checksum
-                        }));
-                        
-                        currentFileIndex++;
-                        setTimeout(sendNextFile, 100);
-                    }
-                }
-            };
-            
-            sendChunk();
+                `Sending: ${file.name} (${formatBytes(file.size)})<br>Progress: 0%`;
+
+            // Send file chunks
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+                
+                const arrayBuffer = await chunk.arrayBuffer();
+                const chunkData = {
+                    type: 'file-chunk',
+                    fileId: fileId,
+                    chunkIndex: i,
+                    data: Array.from(new Uint8Array(arrayBuffer))
+                };
+
+                connections.forEach(conn => {
+                    conn.send(chunkData);
+                });
+
+                totalBytes += arrayBuffer.byteLength;
+                const progress = (totalBytes / file.size) * 100;
+                const speed = calculateSpeed(totalBytes, transferStartTime);
+
+                document.getElementById('transfer-progress').innerHTML = 
+                    `Sending: ${file.name} (${formatBytes(file.size)})<br>Progress: ${progress.toFixed(1)}%`;
+                document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
+
+                // Small delay to prevent overwhelming
+                await new Promise(resolve => setTimeout(resolve, 1));
+            }
+
+            // Send file end
+            connections.forEach(conn => {
+                conn.send({
+                    type: 'file-end',
+                    fileId: fileId
+                });
+            });
         }
-        
-        // Start receiving file
-        function startReceivingFile(metadata) {
-            fileMetadata = metadata;
-            receivedChunks = [];
-            expectedChunks = metadata.chunks;
-            receivedChunkCount = 0;
-            transferStartTime = Date.now();
-            totalBytesReceived = 0;
-            
-            document.getElementById('transfer-progress').innerHTML = 
-                `Receiving: ${metadata.name} (${formatFileSize(metadata.size)})<br>Progress: 0%`;
+
+        // File receiving logic
+        const receivingFiles = new Map();
+
+        function handleIncomingData(data, fromPeer) {
+            if (data.type === 'file-start') {
+                startReceivingFile(data, fromPeer);
+            } else if (data.type === 'file-chunk') {
+                receiveFileChunk(data, fromPeer);
+            } else if (data.type === 'file-end') {
+                finishReceivingFile(data, fromPeer);
+            }
         }
-        
-        // Receive file chunk
-        function receiveFileChunk(chunk) {
-            receivedChunks.push(chunk);
-            receivedChunkCount++;
-            totalBytesReceived += chunk.byteLength;
-            
-            const progress = (receivedChunkCount / expectedChunks) * 100;
-            const speed = calculateSpeed(totalBytesReceived, transferStartTime);
-            
+
+        function startReceivingFile(fileInfo, fromPeer) {
+            receivingFiles.set(fileInfo.fileId, {
+                ...fileInfo,
+                chunks: new Array(fileInfo.totalChunks),
+                receivedChunks: 0,
+                fromPeer: fromPeer,
+                startTime: Date.now(),
+                totalBytesReceived: 0
+            });
+
             document.getElementById('transfer-progress').innerHTML = 
-                `Receiving: ${fileMetadata.name} (${formatFileSize(fileMetadata.size)})<br>Progress: ${progress.toFixed(1)}%`;
+                `Receiving: ${fileInfo.name} from ${fromPeer}<br>Progress: 0%`;
+        }
+
+        function receiveFileChunk(chunkData, fromPeer) {
+            const fileInfo = receivingFiles.get(chunkData.fileId);
+            if (!fileInfo) return;
+
+            fileInfo.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
+            fileInfo.receivedChunks++;
+            fileInfo.totalBytesReceived += chunkData.data.length;
+
+            const progress = (fileInfo.receivedChunks / fileInfo.totalChunks) * 100;
+            const speed = calculateSpeed(fileInfo.totalBytesReceived, fileInfo.startTime);
+
+            document.getElementById('transfer-progress').innerHTML = 
+                `Receiving: ${fileInfo.name} from ${fromPeer}<br>Progress: ${progress.toFixed(1)}%`;
             document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
         }
-        
-        // Finish receiving file
-        function finishReceivingFile(endMessage) {
-            const blob = new Blob(receivedChunks, { type: fileMetadata.mimeType });
-            
-            // Create download link
+
+        function finishReceivingFile(endData, fromPeer) {
+            const fileInfo = receivingFiles.get(endData.fileId);
+            if (!fileInfo) return;
+
+            // Combine all chunks
+            const totalSize = fileInfo.chunks.reduce((sum, chunk) => sum + (chunk ? chunk.length : 0), 0);
+            const fileData = new Uint8Array(totalSize);
+            let offset = 0;
+
+            for (const chunk of fileInfo.chunks) {
+                if (chunk) {
+                    fileData.set(chunk, offset);
+                    offset += chunk.length;
+                }
+            }
+
+            const blob = new Blob([fileData], { type: fileInfo.mimeType });
             const url = URL.createObjectURL(blob);
-            const downloadDiv = document.createElement('div');
-            downloadDiv.innerHTML = `
-                <strong>${fileMetadata.name}</strong> (${formatFileSize(fileMetadata.size)}) - 
-                <a href="${url}" download="${fileMetadata.name}">Download</a>
-                <br>
+
+            // Add to received files list
+            const fileListDiv = document.getElementById('file-list');
+            const fileDiv = document.createElement('div');
+            fileDiv.style.border = '1px solid #ccc';
+            fileDiv.style.padding = '10px';
+            fileDiv.style.margin = '5px';
+            fileDiv.innerHTML = `
+                <strong>${fileInfo.name}</strong> (${formatBytes(fileInfo.size)})<br>
+                From: ${fromPeer}<br>
+                <a href="${url}" download="${fileInfo.name}">📥 Download</a>
             `;
+            fileListDiv.appendChild(fileDiv);
+
+            receivingFiles.delete(endData.fileId);
             
-            document.getElementById('received-files').appendChild(downloadDiv);
-            document.getElementById('transfer-progress').innerHTML += '<br>File received successfully!';
+            document.getElementById('transfer-progress').innerHTML += 
+                `<br><strong>${fileInfo.name} received successfully!</strong>`;
         }
-        
-        // Calculate transfer speed
+
+        function generateFileId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
         function calculateSpeed(bytes, startTime) {
-            const elapsed = (Date.now() - startTime) / 1000; // seconds
-            const speed = bytes / elapsed; // bytes per second
-            return formatFileSize(speed) + '/s';
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = bytes / elapsed;
+            return formatBytes(speed) + '/s';
         }
-        
-        // Format file size
-        function formatFileSize(bytes) {
+
+        function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-        
-        // Clean up on page unload
+
+        // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
-            if (currentRoomCode) {
-                localStorage.removeItem(`signal_${currentRoomCode}_offer`);
-                localStorage.removeItem(`signal_${currentRoomCode}_answer`);
-            }
+            const devices = getStoredDevices();
+            delete devices[myDeviceId];
+            localStorage.setItem(DISCOVERY_KEY, JSON.stringify(devices));
         });
+
+        // Start the application
+        init();
     </script>
 </body>
 </html>
