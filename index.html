@@ -3,363 +3,384 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Easy File Transfer</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <title>P2P File Transfer - Local Network</title>
 </head>
 <body>
-    <div id="app">
-        <h1>Easy File Transfer</h1>
+    <h1>P2P File Transfer - Local Network Only</h1>
+    
+    <div id="connection-section">
+        <h2>Connection</h2>
+        <button onclick="createRoom()">Create Room</button>
+        <br><br>
+        <input type="text" id="room-code" placeholder="Enter room code">
+        <button onclick="joinRoom()">Join Room</button>
+        <br><br>
+        <div id="room-info"></div>
+        <div id="connection-status">Disconnected</div>
+    </div>
+
+    <div id="transfer-section" style="display: none;">
+        <h2>File Transfer</h2>
+        <input type="file" id="file-input" multiple>
+        <button onclick="sendFiles()">Send Selected Files</button>
+        <br><br>
         
-        <!-- Step 1: Choose mode -->
-        <div id="modeSelect">
-            <h2>Choose your device:</h2>
-            <button id="sendMode" style="padding: 20px; font-size: 18px; margin: 10px;">📤 Send Files</button>
-            <button id="receiveMode" style="padding: 20px; font-size: 18px; margin: 10px;">📥 Receive Files</button>
-        </div>
-
-        <!-- Send Mode -->
-        <div id="sendSection" style="display:none;">
-            <h2>📤 Send Files</h2>
-            <div id="qrSection">
-                <p><strong>Step 1:</strong> Show this QR code to the receiving device</p>
-                <canvas id="qrcode"></canvas>
-                <p id="roomCode" style="font-size: 20px; font-weight: bold;"></p>
-            </div>
-            
-            <div id="sendReady" style="display:none;">
-                <p style="color: green;">✅ Device connected! Ready to send files.</p>
-                
-                <div id="dropZone" style="border: 3px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0;">
-                    <h3>Drag & Drop Files Here</h3>
-                    <p>or</p>
-                    <input type="file" id="fileInput" multiple style="display: none;">
-                    <button id="selectFiles" style="padding: 10px 20px;">Select Files</button>
-                </div>
-                
-                <div id="sendProgress" style="display:none;">
-                    <h4>Sending Files:</h4>
-                    <div id="progressBars"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Receive Mode -->
-        <div id="receiveSection" style="display:none;">
-            <h2>📥 Receive Files</h2>
-            
-            <div id="scanSection">
-                <p><strong>Step 1:</strong> Scan the QR code from the sending device</p>
-                <p><strong>Step 2:</strong> Or enter the room code manually</p>
-                <input type="text" id="roomInput" placeholder="Enter room code (e.g. ABC123)" style="padding: 10px; font-size: 16px; width: 200px;">
-                <button id="connectRoom" style="padding: 10px 20px;">Connect</button>
-            </div>
-            
-            <div id="receiveReady" style="display:none;">
-                <p style="color: green;">✅ Connected! Waiting for files...</p>
-                <div id="receivedFiles">
-                    <h3>Received Files:</h3>
-                    <div id="filesList"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Status -->
-        <div id="status" style="margin-top: 20px; padding: 10px; background: #f0f0f0; display: none;">
-            <p id="statusText"></p>
-        </div>
+        <div id="transfer-progress"></div>
+        <div id="speed-info"></div>
+        <br>
+        
+        <h3>Received Files</h3>
+        <div id="received-files"></div>
     </div>
 
     <script>
-        class EasyFileTransfer {
-            constructor() {
-                this.mode = null; // 'send' or 'receive'
-                this.connection = null;
-                this.dataChannel = null;
-                this.roomCode = null;
-                this.connections = new Map(); // Store multiple connections
-                this.pendingFiles = [];
-                this.receivingFiles = new Map();
-                
-                this.setupEventListeners();
+        let localConnection = null;
+        let remoteConnection = null;
+        let dataChannel = null;
+        let currentRoomCode = null;
+        let isHost = false;
+        
+        // File transfer variables
+        let currentFile = null;
+        let currentFileIndex = 0;
+        let filesToSend = [];
+        let receivedChunks = [];
+        let expectedChunks = 0;
+        let receivedChunkCount = 0;
+        let fileMetadata = null;
+        let transferStartTime = 0;
+        let totalBytesReceived = 0;
+        let totalBytesSent = 0;
+        
+        const CHUNK_SIZE = 16384; // 16KB chunks for optimal speed
+        
+        // Generate random room code
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+        
+        // Create room
+        async function createRoom() {
+            currentRoomCode = generateRoomCode();
+            isHost = true;
+            document.getElementById('room-info').innerHTML = `Room Code: <strong>${currentRoomCode}</strong><br>Share this code with the other device`;
+            await setupConnection(true);
+        }
+        
+        // Join room
+        async function joinRoom() {
+            const code = document.getElementById('room-code').value.trim().toUpperCase();
+            if (!code) {
+                alert('Please enter a room code');
+                return;
             }
-
-            setupEventListeners() {
-                document.getElementById('sendMode').addEventListener('click', () => this.initSendMode());
-                document.getElementById('receiveMode').addEventListener('click', () => this.initReceiveMode());
-                document.getElementById('connectRoom').addEventListener('click', () => this.connectToRoom());
-                document.getElementById('selectFiles').addEventListener('click', () => this.selectFiles());
+            currentRoomCode = code;
+            isHost = false;
+            document.getElementById('room-info').innerHTML = `Joining room: <strong>${currentRoomCode}</strong>`;
+            await setupConnection(false);
+        }
+        
+        // Setup WebRTC connection
+        async function setupConnection(isInitiator) {
+            const config = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            };
+            
+            localConnection = new RTCPeerConnection(config);
+            
+            // Handle ICE candidates
+            localConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('ICE candidate:', event.candidate);
+                    // In a real app, you'd send this through a signaling server
+                    // For local network, we'll simulate this
+                }
+            };
+            
+            localConnection.onconnectionstatechange = () => {
+                const state = localConnection.connectionState;
+                document.getElementById('connection-status').textContent = `Connection: ${state}`;
                 
-                // Drag & drop
-                const dropZone = document.getElementById('dropZone');
-                if (dropZone) {
-                    dropZone.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        dropZone.style.background = '#e8f5e8';
-                    });
+                if (state === 'connected') {
+                    document.getElementById('transfer-section').style.display = 'block';
+                    document.getElementById('connection-section').style.display = 'none';
+                }
+            };
+            
+            if (isInitiator) {
+                // Create data channel
+                dataChannel = localConnection.createDataChannel('fileTransfer', {
+                    ordered: true,
+                    maxRetransmits: 3
+                });
+                setupDataChannel(dataChannel);
+                
+                // Create offer
+                const offer = await localConnection.createOffer();
+                await localConnection.setLocalDescription(offer);
+                
+                // Simulate signaling for local network
+                setTimeout(() => simulateSignaling(offer, 'offer'), 1000);
+            } else {
+                // Handle incoming data channel
+                localConnection.ondatachannel = (event) => {
+                    dataChannel = event.channel;
+                    setupDataChannel(dataChannel);
+                };
+                
+                // Wait for offer (simulated)
+                setTimeout(() => waitForOffer(), 1000);
+            }
+        }
+        
+        // Setup data channel handlers
+        function setupDataChannel(channel) {
+            channel.onopen = () => {
+                console.log('Data channel opened');
+                document.getElementById('connection-status').textContent = 'Connected - Ready to transfer files';
+            };
+            
+            channel.onclose = () => {
+                console.log('Data channel closed');
+                document.getElementById('connection-status').textContent = 'Disconnected';
+            };
+            
+            channel.onmessage = (event) => {
+                handleMessage(event.data);
+            };
+            
+            channel.onerror = (error) => {
+                console.error('Data channel error:', error);
+            };
+        }
+        
+        // Simulate signaling for local network demo
+        function simulateSignaling(data, type) {
+            // Store in localStorage to simulate signaling server
+            const signalData = {
+                roomCode: currentRoomCode,
+                type: type,
+                data: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`signal_${currentRoomCode}_${type}`, JSON.stringify(signalData));
+        }
+        
+        async function waitForOffer() {
+            const checkForOffer = async () => {
+                const signalData = localStorage.getItem(`signal_${currentRoomCode}_offer`);
+                if (signalData) {
+                    const parsed = JSON.parse(signalData);
+                    await localConnection.setRemoteDescription(parsed.data);
                     
-                    dropZone.addEventListener('dragleave', () => {
-                        dropZone.style.background = '';
-                    });
+                    const answer = await localConnection.createAnswer();
+                    await localConnection.setLocalDescription(answer);
                     
-                    dropZone.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        dropZone.style.background = '';
-                        this.handleFiles(Array.from(e.dataTransfer.files));
-                    });
-                }
-            }
-
-            async initSendMode() {
-                this.mode = 'send';
-                this.hideAllSections();
-                document.getElementById('sendSection').style.display = 'block';
-                
-                // Generate room code
-                this.roomCode = this.generateRoomCode();
-                document.getElementById('roomCode').textContent = `Room Code: ${this.roomCode}`;
-                
-                // Generate QR code
-                const qrData = JSON.stringify({
-                    room: this.roomCode,
-                    url: window.location.href
-                });
-                
-                QRCode.toCanvas(document.getElementById('qrcode'), qrData, {
-                    width: 200,
-                    margin: 2
-                });
-                
-                this.showStatus('Waiting for device to connect...');
-                
-                // Simulate connection after 3 seconds (for demo)
-                setTimeout(() => {
-                    this.showStatus('Device connected!');
-                    document.getElementById('sendReady').style.display = 'block';
-                }, 3000);
-            }
-
-            initReceiveMode() {
-                this.mode = 'receive';
-                this.hideAllSections();
-                document.getElementById('receiveSection').style.display = 'block';
-                this.showStatus('Enter room code to connect');
-            }
-
-            connectToRoom() {
-                const roomCode = document.getElementById('roomInput').value.trim().toUpperCase();
-                if (!roomCode) {
-                    alert('Please enter a room code');
-                    return;
-                }
-                
-                this.roomCode = roomCode;
-                this.showStatus('Connecting...');
-                
-                // Simulate connection
-                setTimeout(() => {
-                    this.showStatus('Connected! Ready to receive files.');
-                    document.getElementById('scanSection').style.display = 'none';
-                    document.getElementById('receiveReady').style.display = 'block';
-                }, 2000);
-            }
-
-            selectFiles() {
-                document.getElementById('fileInput').click();
-                document.getElementById('fileInput').addEventListener('change', (e) => {
-                    this.handleFiles(Array.from(e.target.files));
-                });
-            }
-
-            async handleFiles(files) {
-                if (files.length === 0) return;
-                
-                document.getElementById('sendProgress').style.display = 'block';
-                const progressBars = document.getElementById('progressBars');
-                
-                for (const file of files) {
-                    await this.sendFile(file, progressBars);
-                }
-            }
-
-            async sendFile(file, container) {
-                // Create progress bar for this file
-                const fileDiv = document.createElement('div');
-                fileDiv.style.marginBottom = '10px';
-                fileDiv.innerHTML = `
-                    <p><strong>${file.name}</strong> (${this.formatFileSize(file.size)})</p>
-                    <div style="background: #f0f0f0; height: 20px; border-radius: 10px; overflow: hidden;">
-                        <div id="progress-${file.name}" style="background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s;"></div>
-                    </div>
-                    <p id="status-${file.name}">Preparing...</p>
-                `;
-                container.appendChild(fileDiv);
-                
-                // Simulate sending
-                const progressBar = document.getElementById(`progress-${file.name}`);
-                const statusText = document.getElementById(`status-${file.name}`);
-                
-                for (let i = 0; i <= 100; i += 2) {
-                    progressBar.style.width = i + '%';
-                    statusText.textContent = `Sending... ${i}%`;
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-                
-                statusText.textContent = '✅ Sent successfully!';
-                statusText.style.color = 'green';
-                
-                // Simulate receiving on the other end
-                if (this.mode === 'send') {
-                    this.simulateReceive(file);
-                }
-            }
-
-            simulateReceive(file) {
-                // Simulate file appearing on receive side
-                setTimeout(() => {
-                    if (document.getElementById('receiveReady').style.display === 'block') {
-                        this.addReceivedFile(file);
+                    simulateSignaling(answer, 'answer');
+                    
+                    // Check for answer on the other side
+                    if (isHost) {
+                        checkForAnswer();
                     }
-                }, 1000);
-            }
-
-            addReceivedFile(file) {
-                const filesList = document.getElementById('filesList');
-                const fileDiv = document.createElement('div');
-                fileDiv.style.border = '1px solid #ddd';
-                fileDiv.style.padding = '10px';
-                fileDiv.style.margin = '10px 0';
-                fileDiv.style.borderRadius = '5px';
-                
-                fileDiv.innerHTML = `
-                    <p><strong>📄 ${file.name}</strong></p>
-                    <p>Size: ${this.formatFileSize(file.size)}</p>
-                    <button onclick="easyTransfer.downloadFile('${file.name}')" 
-                            style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
-                        💾 Download
-                    </button>
-                `;
-                filesList.appendChild(fileDiv);
-                
-                // Store file for download
-                if (!window.downloadableFiles) window.downloadableFiles = new Map();
-                window.downloadableFiles.set(file.name, file);
-                
-                this.showStatus(`Received: ${file.name}`);
-            }
-
-            downloadFile(fileName) {
-                const file = window.downloadableFiles?.get(fileName);
-                if (!file) {
-                    alert('File not found');
-                    return;
+                } else {
+                    setTimeout(checkForOffer, 1000);
                 }
-                
-                const url = URL.createObjectURL(file);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                this.showStatus(`Downloaded: ${fileName}`);
-            }
-
-            generateRoomCode() {
-                return Math.random().toString(36).substring(2, 8).toUpperCase();
-            }
-
-            hideAllSections() {
-                document.getElementById('modeSelect').style.display = 'none';
-                document.getElementById('sendSection').style.display = 'none';
-                document.getElementById('receiveSection').style.display = 'none';
-            }
-
-            showStatus(message) {
-                document.getElementById('status').style.display = 'block';
-                document.getElementById('statusText').textContent = message;
-            }
-
-            formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            };
+            
+            const checkForAnswer = async () => {
+                const signalData = localStorage.getItem(`signal_${currentRoomCode}_answer`);
+                if (signalData) {
+                    const parsed = JSON.parse(signalData);
+                    await localConnection.setRemoteDescription(parsed.data);
+                } else {
+                    setTimeout(checkForAnswer, 1000);
+                }
+            };
+            
+            if (isHost) {
+                checkForAnswer();
+            } else {
+                checkForOffer();
             }
         }
-
-        // Initialize
-        const easyTransfer = new EasyFileTransfer();
-        window.easyTransfer = easyTransfer;
-        window.downloadableFiles = new Map();
+        
+        // Handle incoming messages
+        function handleMessage(data) {
+            try {
+                if (typeof data === 'string') {
+                    const message = JSON.parse(data);
+                    
+                    if (message.type === 'file-start') {
+                        startReceivingFile(message);
+                    } else if (message.type === 'file-end') {
+                        finishReceivingFile(message);
+                    }
+                } else {
+                    // Binary data (file chunk)
+                    receiveFileChunk(data);
+                }
+            } catch (error) {
+                console.error('Error handling message:', error);
+            }
+        }
+        
+        // Send files
+        async function sendFiles() {
+            const fileInput = document.getElementById('file-input');
+            const files = Array.from(fileInput.files);
+            
+            if (files.length === 0) {
+                alert('Please select files to send');
+                return;
+            }
+            
+            if (!dataChannel || dataChannel.readyState !== 'open') {
+                alert('Connection not ready');
+                return;
+            }
+            
+            filesToSend = files;
+            currentFileIndex = 0;
+            sendNextFile();
+        }
+        
+        async function sendNextFile() {
+            if (currentFileIndex >= filesToSend.length) {
+                document.getElementById('transfer-progress').innerHTML += '<br>All files sent successfully!';
+                return;
+            }
+            
+            currentFile = filesToSend[currentFileIndex];
+            const chunks = Math.ceil(currentFile.size / CHUNK_SIZE);
+            
+            // Send file metadata
+            const metadata = {
+                type: 'file-start',
+                name: currentFile.name,
+                size: currentFile.size,
+                chunks: chunks,
+                mimeType: currentFile.type
+            };
+            
+            dataChannel.send(JSON.stringify(metadata));
+            
+            transferStartTime = Date.now();
+            totalBytesSent = 0;
+            
+            document.getElementById('transfer-progress').innerHTML = 
+                `Sending: ${currentFile.name} (${formatFileSize(currentFile.size)})<br>Progress: 0%`;
+            
+            // Send file in chunks
+            const reader = new FileReader();
+            let offset = 0;
+            
+            const sendChunk = () => {
+                const chunk = currentFile.slice(offset, offset + CHUNK_SIZE);
+                reader.readAsArrayBuffer(chunk);
+            };
+            
+            reader.onload = (event) => {
+                if (dataChannel.readyState === 'open') {
+                    dataChannel.send(event.target.result);
+                    totalBytesSent += event.target.result.byteLength;
+                    
+                    const progress = (totalBytesSent / currentFile.size) * 100;
+                    const speed = calculateSpeed(totalBytesSent, transferStartTime);
+                    
+                    document.getElementById('transfer-progress').innerHTML = 
+                        `Sending: ${currentFile.name} (${formatFileSize(currentFile.size)})<br>Progress: ${progress.toFixed(1)}%`;
+                    document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
+                    
+                    offset += CHUNK_SIZE;
+                    
+                    if (offset < currentFile.size) {
+                        setTimeout(sendChunk, 1); // Small delay to prevent overwhelming
+                    } else {
+                        // File sending complete
+                        dataChannel.send(JSON.stringify({
+                            type: 'file-end',
+                            name: currentFile.name,
+                            checksum: 'placeholder' // In real app, calculate actual checksum
+                        }));
+                        
+                        currentFileIndex++;
+                        setTimeout(sendNextFile, 100);
+                    }
+                }
+            };
+            
+            sendChunk();
+        }
+        
+        // Start receiving file
+        function startReceivingFile(metadata) {
+            fileMetadata = metadata;
+            receivedChunks = [];
+            expectedChunks = metadata.chunks;
+            receivedChunkCount = 0;
+            transferStartTime = Date.now();
+            totalBytesReceived = 0;
+            
+            document.getElementById('transfer-progress').innerHTML = 
+                `Receiving: ${metadata.name} (${formatFileSize(metadata.size)})<br>Progress: 0%`;
+        }
+        
+        // Receive file chunk
+        function receiveFileChunk(chunk) {
+            receivedChunks.push(chunk);
+            receivedChunkCount++;
+            totalBytesReceived += chunk.byteLength;
+            
+            const progress = (receivedChunkCount / expectedChunks) * 100;
+            const speed = calculateSpeed(totalBytesReceived, transferStartTime);
+            
+            document.getElementById('transfer-progress').innerHTML = 
+                `Receiving: ${fileMetadata.name} (${formatFileSize(fileMetadata.size)})<br>Progress: ${progress.toFixed(1)}%`;
+            document.getElementById('speed-info').innerHTML = `Speed: ${speed}`;
+        }
+        
+        // Finish receiving file
+        function finishReceivingFile(endMessage) {
+            const blob = new Blob(receivedChunks, { type: fileMetadata.mimeType });
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const downloadDiv = document.createElement('div');
+            downloadDiv.innerHTML = `
+                <strong>${fileMetadata.name}</strong> (${formatFileSize(fileMetadata.size)}) - 
+                <a href="${url}" download="${fileMetadata.name}">Download</a>
+                <br>
+            `;
+            
+            document.getElementById('received-files').appendChild(downloadDiv);
+            document.getElementById('transfer-progress').innerHTML += '<br>File received successfully!';
+        }
+        
+        // Calculate transfer speed
+        function calculateSpeed(bytes, startTime) {
+            const elapsed = (Date.now() - startTime) / 1000; // seconds
+            const speed = bytes / elapsed; // bytes per second
+            return formatFileSize(speed) + '/s';
+        }
+        
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentRoomCode) {
+                localStorage.removeItem(`signal_${currentRoomCode}_offer`);
+                localStorage.removeItem(`signal_${currentRoomCode}_answer`);
+            }
+        });
     </script>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-
-        #app {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        button {
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-
-        #sendMode {
-            background: #4CAF50;
-            color: white;
-        }
-
-        #receiveMode {
-            background: #2196F3;
-            color: white;
-        }
-
-        #dropZone {
-            transition: all 0.3s;
-        }
-
-        #dropZone:hover {
-            border-color: #4CAF50;
-            background: #f9f9f9;
-        }
-
-        #qrcode {
-            display: block;
-            margin: 20px auto;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-        }
-
-        input[type="text"] {
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            margin-right: 10px;
-        }
-
-        input[type="text"]:focus {
-            border-color: #4CAF50;
-            outline: none;
-        }
-    </style>
 </body>
 </html>
